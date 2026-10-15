@@ -1,6 +1,6 @@
 import { isOperator } from "../../../../../lib/server/scan-security";
 import {
-  LighthouseSetupError,
+  lighthouseSetupDiagnostic,
   prepareLighthouseSandboxSnapshot,
 } from "../../../../../lib/server/lighthouse";
 
@@ -17,11 +17,10 @@ export async function POST(request: Request) {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
-    const stage =
-      error instanceof LighthouseSetupError ? error.stage : "create";
-    console.error("lighthouse_warm_failed", { stage });
+    const diagnostic = lighthouseSetupDiagnostic(error);
+    console.error("lighthouse_warm_failed", diagnostic);
     return Response.json(
-      { error: "The audit worker could not be prepared.", stage },
+      { error: "The audit worker could not be prepared.", ...diagnostic },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

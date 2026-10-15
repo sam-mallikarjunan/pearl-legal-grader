@@ -6,6 +6,7 @@ import {
   createLighthouseTransferBudget,
   isExpiredLighthouseSnapshot,
   LighthouseSetupError,
+  lighthouseSetupDiagnostic,
   LIGHTHOUSE_DENIED_SUBNETS,
   LIGHTHOUSE_SANDBOX_TIMEOUT_MS,
   lighthouseRuntimeScript,
@@ -284,4 +285,33 @@ test("operator setup errors expose only a fixed safe stage code", () => {
   assert.equal(error.stage, "browserinstall");
   assert.equal(error.message, "lighthouse_setup_browserinstall");
   assert.equal(error.cause, undefined);
+});
+
+test("operator diagnostics retain bounded provider codes and discard sensitive error details", () => {
+  const error = new LighthouseSetupError("create", {
+    response: { status: 400 },
+    json: {
+      error: { code: "invalid_network_policy", message: "SECRET_TOKEN" },
+    },
+    message: "SECRET_TOKEN",
+    text: "SECRET_TOKEN",
+  });
+  assert.deepEqual(lighthouseSetupDiagnostic(error), {
+    stage: "create",
+    classification: "provider_api_error",
+    providerStatus: 400,
+    providerCode: "invalid_network_policy",
+  });
+  assert.doesNotMatch(JSON.stringify(error), /SECRET_TOKEN/);
+  const rejectedCode = new LighthouseSetupError("create", {
+    response: { status: 403 },
+    json: { error: { code: "bad code\nSECRET_TOKEN" } },
+  });
+  assert.equal(lighthouseSetupDiagnostic(rejectedCode).providerCode, undefined);
+  const oidcError = new Error("SECRET_TOKEN");
+  oidcError.name = "VercelOidcContextError";
+  assert.deepEqual(
+    lighthouseSetupDiagnostic(new LighthouseSetupError("create", oidcError)),
+    { stage: "create", classification: "oidc_missing" },
+  );
 });

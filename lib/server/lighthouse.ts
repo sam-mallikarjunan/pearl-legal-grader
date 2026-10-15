@@ -77,11 +77,73 @@ export type LighthouseSetupStage =
   | "browserinstall"
   | "chromesmoke"
   | "snapshot";
+export interface LighthouseSetupDiagnostic {
+  stage: LighthouseSetupStage;
+  classification:
+    | "oidc_missing"
+    | "provider_api_error"
+    | "sdk_type_error"
+    | "setup_command_failed"
+    | "unknown";
+  providerStatus?: number;
+  providerCode?: string;
+}
 export class LighthouseSetupError extends Error {
-  constructor(public readonly stage: LighthouseSetupStage) {
+  public readonly diagnostic: LighthouseSetupDiagnostic;
+  constructor(
+    public readonly stage: LighthouseSetupStage,
+    error?: unknown,
+  ) {
     super(`lighthouse_setup_${stage}`);
     this.name = "LighthouseSetupError";
+    const value =
+      typeof error === "object" && error !== null
+        ? (error as {
+            name?: unknown;
+            message?: unknown;
+            response?: { status?: unknown };
+            json?: { error?: { code?: unknown } };
+          })
+        : {};
+    const status = value.response?.status;
+    const code = value.json?.error?.code;
+    const providerStatus =
+      typeof status === "number" &&
+      Number.isInteger(status) &&
+      status >= 100 &&
+      status <= 599
+        ? status
+        : undefined;
+    const providerCode =
+      typeof code === "string" && /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.test(code)
+        ? code
+        : undefined;
+    this.diagnostic = {
+      stage,
+      classification: [
+        "VercelOidcContextError",
+        "LocalOidcContextError",
+      ].includes(String(value.name))
+        ? "oidc_missing"
+        : providerStatus !== undefined
+          ? "provider_api_error"
+          : value.name === "TypeError"
+            ? "sdk_type_error"
+            : value.message === "audit_command_failed"
+              ? "setup_command_failed"
+              : "unknown",
+      ...(providerStatus === undefined ? {} : { providerStatus }),
+      ...(providerCode === undefined ? {} : { providerCode }),
+    };
   }
+}
+/** Fixed operator diagnostics only; never includes exception messages, response bodies or causes. */
+export function lighthouseSetupDiagnostic(
+  error: unknown,
+): LighthouseSetupDiagnostic {
+  return error instanceof LighthouseSetupError
+    ? error.diagnostic
+    : new LighthouseSetupError("create", error).diagnostic;
 }
 async function setupStage<T>(
   stage: LighthouseSetupStage,
@@ -89,8 +151,8 @@ async function setupStage<T>(
 ): Promise<T> {
   try {
     return await operation();
-  } catch {
-    throw new LighthouseSetupError(stage);
+  } catch (error) {
+    throw new LighthouseSetupError(stage, error);
   }
 }
 
