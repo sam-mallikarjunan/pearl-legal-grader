@@ -102,6 +102,37 @@ test("bounded scanner visits at most five public pages, never submits forms and 
   assert.equal(isWebsiteScanResult(result), true);
 });
 
+test("readiness mode inspects only the homepage despite relevant follow-up links", async () => {
+  const visited: string[] = [];
+  const fetcher = async (
+    input: string | URL,
+    options?: WebsiteFetchOptions,
+  ): Promise<WebsiteFetchResult> => {
+    const url = new URL(String(input));
+    visited.push(url.href);
+    await options?.authorize?.(url);
+    return {
+      url: url.href,
+      status: 200,
+      headers: {},
+      body:
+        url.pathname === "/robots.txt" ? "User-agent: *\nAllow: /" : fixture,
+      redirects: 0,
+    };
+  };
+  const result = await inspectWebsite("https://lawfirm.com/", undefined, {
+    fetcher,
+    performanceProvider: async () => performance,
+    maxPages: 1,
+  });
+  assert.equal(result.pages.length, 1);
+  assert.deepEqual(visited, [
+    "https://lawfirm.com/",
+    "https://lawfirm.com/robots.txt",
+  ]);
+  assert.equal(isWebsiteScanResult(result), true);
+});
+
 test("a disallowed robots page is not fetched and failed policy lookup stops rather than assuming permission", async () => {
   let htmlReads = 0;
   const fetcher = async (

@@ -468,6 +468,8 @@ export function parseWebsitePage(
 
 export interface InspectWebsiteOptions {
   performanceProvider?: (url: string) => Promise<WebsitePerformance>;
+  /** Internal readiness checks can restrict the default five-page scan to its homepage. */
+  maxPages?: 1 | 5;
   /** Test seam; production callers should use the DNS-pinned default. */
   fetcher?: typeof fetchPublicWebsite;
 }
@@ -703,7 +705,12 @@ export async function inspectWebsite(
       const candidate = candidates.find(
         (c) => c.kind === kind && !visited.has(c.url),
       );
-      if (!candidate || Date.now() >= deadline || pages.length >= 5) continue;
+      if (
+        !candidate ||
+        Date.now() >= deadline ||
+        pages.length >= (options.maxPages ?? 5)
+      )
+        continue;
       visited.add(candidate.url);
       await inspectPage(candidate.url, kind, new URL(home.page.url).origin);
       await progress(
@@ -757,7 +764,9 @@ export async function inspectWebsite(
     performance,
     warnings: [...new Set(warnings)],
     limitations: [
-      "This is a bounded inspection of up to five public pages, not a full crawl or a security, accessibility or legal-compliance certification.",
+      options.maxPages === 1
+        ? "This readiness check inspects the public homepage only, not a full crawl or a security, accessibility or legal-compliance certification."
+        : "This is a bounded inspection of up to five public pages, not a full crawl or a security, accessibility or legal-compliance certification.",
       "Static HTML checks do not execute website scripts, submit forms, place calls, test booking completion or verify analytics configuration.",
       "Practice names, services and location suggestions are extracted text clues and require owner confirmation.",
       "The website score uses provisional, versioned rules and measured checks only. It remains separate from owner-reported practice maturity.",

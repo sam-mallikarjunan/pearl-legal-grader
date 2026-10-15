@@ -4,6 +4,7 @@ import { POST } from "../../app/api/scans/route";
 import { GET } from "../../app/api/scans/[id]/route";
 import { POST as warm } from "../../app/api/internal/scans/warm/route";
 import { GET as cleanup } from "../../app/api/internal/scans/cleanup/route";
+import { POST as checkWorker } from "../../app/api/internal/scans/check-worker/route";
 
 test("untrusted scan requests fail before any storage, workflow or paid worker call", async () => {
   const names = [
@@ -93,6 +94,21 @@ test("untrusted scan requests fail before any storage, workflow or paid worker c
       ).status,
       404,
     );
+    for (const authorization of [undefined, "Bearer " + "wrong".repeat(8)]) {
+      const readiness = await checkWorker(
+        new Request(
+          "https://grader.test/api/internal/scans/check-worker?url=https://public.org",
+          {
+            method: "POST",
+            headers: authorization ? { authorization } : {},
+            body: JSON.stringify({ url: "https://public.org" }),
+          },
+        ),
+      );
+      assert.equal(readiness.status, 404);
+      assert.equal(readiness.headers.get("cache-control"), "no-store");
+      assert.deepEqual(await readiness.json(), { error: "Not found." });
+    }
     process.env.SCANS_ENABLED = "false";
     assert.equal(
       (await POST(request(JSON.stringify({ url: "https://public.org/" }))))

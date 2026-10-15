@@ -393,7 +393,17 @@ async function bootstrapRuntime(sandbox: AuditSandbox) {
         "--save-exact",
         ...LIGHTHOUSE_RUNTIME_PACKAGES,
       ]),
-      auditCommand(sandbox, "apt-get", ["update"], true),
+      (async () => {
+        await auditCommand(sandbox, "apt-get", ["update"], true);
+        // The managed node image has no archive extractor; Puppeteer's Chrome
+        // installer requires unzip before it can extract or install browser deps.
+        await auditCommand(
+          sandbox,
+          "apt-get",
+          ["install", "-y", "--no-install-recommends", "unzip"],
+          true,
+        );
+      })(),
     ]),
   );
   await setupStage("browserinstall", () =>

@@ -45,10 +45,12 @@ function fakeSandbox(
   } = {},
 ) {
   const events: string[] = [];
+  const commands: Array<{ cmd: string; args: string[] }> = [];
   const files = new Map<string, Buffer>();
   let calls = 0;
   return {
     events,
+    commands,
     files,
     async runCommand(command: {
       cmd: string;
@@ -56,6 +58,7 @@ function fakeSandbox(
       env?: Record<string, string>;
     }) {
       events.push(`command:${command.cmd}`);
+      commands.push({ cmd: command.cmd, args: command.args });
       assert.deepEqual(Object.keys(command.env ?? {}), ["PUPPETEER_CACHE_DIR"]);
       calls++;
       return {
@@ -345,4 +348,18 @@ test("IPv6 disable and verification fail closed before bootstrap or website exec
     assert.equal(sandbox.files.size, 0);
   }
   assert.ok(LIGHTHOUSE_DENIED_SUBNETS.every((range) => !range.includes(":")));
+});
+
+test("cold bootstrap installs an archive extractor before the Chrome installer", async () => {
+  const sandbox = fakeSandbox();
+  const runner = createSandboxLighthouseRunner(async () => sandbox, validate);
+  assert.equal((await runner(url)).status, "available");
+  const unzip = sandbox.commands.findIndex(
+    (command) => command.cmd === "apt-get" && command.args.includes("unzip"),
+  );
+  const chrome = sandbox.commands.findIndex((command) =>
+    command.cmd.endsWith("/.bin/puppeteer"),
+  );
+  assert.ok(unzip >= 0);
+  assert.ok(chrome > unzip);
 });
