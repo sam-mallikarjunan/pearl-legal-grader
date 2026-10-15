@@ -1,4 +1,6 @@
 allowBuilds:
+  '@swc/core': true
+  cbor-extract: true
   esbuild: true
 minimumReleaseAgeExclude:
   - '@next/env@16.4.1'

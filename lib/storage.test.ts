@@ -7,8 +7,10 @@ import {
   emptyStore,
   normalizeWebsite,
   parseStore,
+  parseScanAccess,
   type PreviewStore,
 } from "./storage";
+import type { WebsiteScanResult } from "./website/types";
 
 function savedStore(): PreviewStore {
   const store = emptyStore();
@@ -319,4 +321,120 @@ test("website normalization rejects credentials, nonweb schemes and malformed in
     "https://firm.\nexample",
   ])
     assert.equal(normalizeWebsite(value), null, value);
+});
+
+const scanFixture = (): WebsiteScanResult => ({
+  scannerVersion: "website-scan-v1",
+  rubricVersion: "website-rubric-v1",
+  status: "unavailable",
+  submittedUrl: "https://firm.example/",
+  finalUrl: null,
+  startedAt: "2026-10-15T18:00:00.000Z",
+  completedAt: "2026-10-15T18:00:01.000Z",
+  durationMs: 1000,
+  pages: [],
+  findings: [],
+  score: null,
+  coverage: 0,
+  measuredChecks: 0,
+  totalChecks: 20,
+  suggestedContext: {
+    firmName: null,
+    practiceAreas: [],
+    locations: [],
+    evidence: [],
+    requiresConfirmation: true,
+  },
+  technologies: [],
+  performance: {
+    status: "unavailable",
+    strategy: "mobile",
+    fetchedAt: "2026-10-15T18:00:01.000Z",
+    sourceUrl: "https://firm.example/",
+    reason: "Quota unavailable",
+    categories: {},
+    metrics: [],
+    opportunities: [],
+  },
+  warnings: ["Website could not be inspected"],
+  limitations: ["Public pages only"],
+});
+
+test("pre-scan device history remains compatible and scan snapshots retain issued evidence", () => {
+  const legacy = savedStore();
+  delete legacy.websiteSessions;
+  assert.deepEqual(parseStore(JSON.stringify(legacy)), legacy);
+  const store = savedStore();
+  store.assessments[0].isSample = false;
+  store.assessments[0].practiceId = "real-practice-123";
+  store.assessments[0].websiteScan = scanFixture();
+  store.websiteSessions = [
+    {
+      localId: "local-request",
+      practiceId: store.assessments[0].practiceId,
+      scanId: "scan-12345678",
+      url: "https://firm.example/",
+      createdAt: "2026-10-15T18:00:00.000Z",
+      status: "unavailable",
+      stage: "Inspection unavailable",
+      result: scanFixture(),
+    },
+  ];
+  const earlier = JSON.stringify(store.assessments[0]);
+  store.websiteSessions[0].result!.completedAt = "2026-10-15T20:00:01.000Z";
+  assert.equal(JSON.stringify(store.assessments[0]), earlier);
+  assert.deepEqual(parseStore(JSON.stringify(store)), store);
+  store.assessments[0].websiteScan.coverage = -1;
+  assert.equal(parseStore(JSON.stringify(store)), null);
+});
+
+test("scan session validation rejects corrupt shapes and credential leakage into exportable history", () => {
+  const store = savedStore();
+  store.websiteSessions = [
+    {
+      localId: "local-request",
+      practiceId: "practice-123",
+      scanId: "scan-12345678",
+      url: "https://firm.example/",
+      createdAt: "2026-10-15T18:00:00.000Z",
+      status: "queued",
+      stage: "Waiting",
+    },
+  ];
+  assert.ok(parseStore(JSON.stringify(store)));
+  (store.websiteSessions[0] as unknown as Record<string, unknown>).accessToken =
+    "secret-should-never-be-here";
+  assert.equal(parseStore(JSON.stringify(store)), null);
+  delete (store.websiteSessions[0] as unknown as Record<string, unknown>)
+    .accessToken;
+  (store.websiteSessions[0] as unknown as Record<string, unknown>).stage = {};
+  assert.equal(parseStore(JSON.stringify(store)), null);
+  const sample = savedStore();
+  sample.assessments[0].websiteScan = scanFixture();
+  assert.equal(
+    parseStore(JSON.stringify(sample)),
+    null,
+    "fictional reports cannot acquire real scan evidence",
+  );
+});
+
+test("private scan access has a separate bounded validator and never enters report exports", () => {
+  const token = "a".repeat(64);
+  assert.deepEqual(parseScanAccess(null), {});
+  assert.deepEqual(
+    parseScanAccess(JSON.stringify({ "scan-12345678": token })),
+    { "scan-12345678": token },
+  );
+  for (const raw of [
+    "{broken",
+    "[]",
+    "null",
+    JSON.stringify({ "bad id": token }),
+    JSON.stringify({ "scan-12345678": "short" }),
+    JSON.stringify({ "scan-12345678": { token } }),
+  ])
+    assert.equal(parseScanAccess(raw), null);
+  const store = emptyStore();
+  assert.equal(JSON.stringify(store).includes(token), false);
+  assert.equal(JSON.stringify(store).includes("accessToken"), false);
 });

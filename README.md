@@ -1,53 +1,88 @@
-# Independent Law Practice Grader — frontend preview
+# Independent Law Practice Grader
 
-A Next.js and React browser preview of a practice assessment, scoped results, three prioritized actions, progress history and editable local scoring rules.
+A Next.js and React assessment with browser-local practice history and an optional live website scanning backend. Owner-reported practice maturity and observed website checks have separate scores, evidence and histories.
 
-**This preview does not crawl websites or connect to live services.** Website observations are labeled sample content. Operating answers come from the person using the preview or the explicitly fictional example. No email is sent, no login is created, and no records are written to Pearl, HubSpot or a backend.
+The live-scan implementation is in this repository. Availability on a particular deployment depends on its database, worker and environment configuration; this document does not assert that hosted end-to-end verification has been completed.
 
 ## Run locally
 
-Use Node.js 24 or later and the pnpm version pinned in `package.json`. From this directory:
+Use Node.js 24 and the pnpm version pinned in `package.json`:
 
 ```sh
 pnpm install
 pnpm dev
 ```
 
-Open the local address printed by the development server. Use `pnpm build` for the production build and `pnpm start` to serve it. Run `pnpm typecheck` and `pnpm test` for the checks defined in `package.json`. The corresponding npm commands also work.
+`pnpm build` creates a production build; `pnpm start` serves it. Run `pnpm typecheck` and `pnpm test` for the automated checks. Without scan configuration, the questionnaire, local reports, fictional example and local scoring editor remain available; no live scan is invented.
 
-## What to explore
+## Experience
 
-1. Start an assessment with a website URL or the no-website route. A URL is context only; the preview does not fetch it.
-2. Confirm practice context and choose what the owner wants to improve.
-3. Answer concrete practice questions. Unknown and not applicable have distinct meanings; neither should silently become a zero.
-4. View results for dimensions with sufficient evidence, with coverage and evidence type shown separately.
-5. Choose from three prioritized actions and track reported completion.
-6. Save another local assessment to compare results. Completing an action is distinct from observing a business improvement.
-7. Explore the local admin controls for questions, weights and rules. These changes affect only this browser's preview data.
+1. Enter a public practice website or choose the no-website route.
+2. When scanning is configured, a bounded website check runs while the owner answers practice questions. The questionnaire remains usable if a scan is blocked or unavailable.
+3. Confirm practice context, goals and capacity, then answer questions about concrete operating practices.
+4. View a scoped owner-reported assessment, separate website findings, evidence coverage and prioritized actions.
+5. Save dated reports, mark actions completed or deferred, and reassess later. A completion checkbox does not establish a business improvement.
+6. Explore local scoring controls to change question wording and weights and publish a new browser-local rubric version without rewriting earlier reports.
 
-The fictional example uses **Juniper Family Law**, an invented solo practice in Portland, Oregon. Its website, answers, scores and actions are demonstration content, not research about an actual firm. The reserved `.example` website address is not a target for assessment.
+**Juniper Family Law** is an explicitly fictional solo-practice example. Its reserved `.example` URL is never scanned, and its answers are not attached to a user's real website.
 
-## Browser storage and privacy
+## Live website checks
 
-The preview stores its state in this browser's local storage for this application origin. It has no account system, synchronization, database backup or protected admin boundary. Another person using the same browser profile can access the saved preview; browser storage can also be cleared or lost.
+The scanner starts at the public homepage and follows up to four relevant same-origin contact, services, about/team and fees/FAQ links. It does not perform a whole-site crawl. Checks include contact and consultation elements, service/people/location wording, page metadata, indexing directives, main headings, viewport declarations, limited image/form-label signals and detectable technology markers.
 
-Use fictional or non-sensitive information. Do not enter credentials, client identities, matter narratives, privileged information, raw payment data or individual employee compensation. A website URL or firm name you enter may be included in an exported preview.
+Static HTML is parsed without executing website scripts. A separate mobile Lighthouse laboratory audit runs through Google PageSpeed Insights when a server-side key is configured; otherwise it uses an isolated, disposable Vercel Sandbox worker. The sandbox worker executes the public page's scripts in a fresh browser without application credentials. Laboratory scores differ from real-user field data and can vary between runs. This version does not collect CrUX field data.
 
-Use the preview's export and clear controls when available. Inspect an export before sharing it. To remove local state directly, clear this application's local storage in the browser's developer tools; clearing browser storage removes saved answers, progress and local configuration. This is local preview behavior, not a production data-retention or deletion service.
+Each result records page URLs, timestamps, scanner and rubric versions, bounded evidence, source/provider information, measurements, limitations and action suggestions. Raw HTML, cookies, form submissions, screenshots and full browser traces are not retained. Technology detection indicates a marker's presence, not a working integration, and earns no scoring bonus.
 
-## Reading the result
+Unknown, blocked, unavailable and inapplicable evidence does not become zero. A partial scan can have a higher score than a more complete scan, so the report displays weighted evidence coverage separately. The website score is a provisional assessment of observed checks; it does not measure legal skill, licensing, compliance or overall firm quality.
 
-- **Practice context** selects relevant questions and recommendations; it does not earn points.
-- **Reported practice** describes the selected maturity answer. It does not establish that a process works consistently.
-- **Sample website finding** is fictional demonstration content, even when a real URL was entered.
-- **Evidence coverage** describes how much applicable information is available. It is separate from practice quality.
-- **Incomplete assessment** is not a poor practice grade. Do not present a partial website assessment as a whole-practice certification.
-- **Action completed** records a local status change. It does not verify an economic or client-service outcome.
+## Backend setup
 
-Local admin tools demonstrate configuration and release behavior. They provide no authentication, access isolation, legal review or protection against deliberate score manipulation. Production administration must have server-side permissions, audit, validation and reviewed publication.
+The backend uses Vercel Workflow for scan execution and Supabase for jobs, access grants, caching and usage counters. Apply the SQL migration in `supabase/migrations/` to a dedicated project. Keep service credentials server-side; never commit them or expose them through `NEXT_PUBLIC_` variables.
 
-## Intentional exclusions
+Copy `.env.example` to an ignored `.env.local` for local configuration. Configure the corresponding server environment on Vercel:
 
-No live crawl or PageSpeed request; AI inference; email delivery; magic-link authentication; public profiles or leaderboards; teammate invitations; CRM sync; paid services; document upload; background scheduling; or statistical/ML claims. The full proposed product requires separate implementation and end-to-end verification.
+| Variable                         | Purpose                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `SUPABASE_URL`                   | Dedicated project's HTTPS endpoint                                                            |
+| `SUPABASE_SECRET_KEY`            | Server secret key; the service-role key is also supported through `SUPABASE_SERVICE_ROLE_KEY` |
+| `SCAN_HASH_SECRET`               | Random secret of at least 32 characters for HMAC request-limit identifiers                    |
+| `SCAN_OPERATOR_SECRET`           | Random secret of at least 32 characters for internal maintenance endpoints                    |
+| `CRON_SECRET`                    | Set to the same value as `SCAN_OPERATOR_SECRET` so Vercel's cleanup cron can authenticate     |
+| `SCANS_ENABLED`                  | Explicitly set `true` after database and worker setup                                         |
+| `PAGESPEED_API_KEY`              | Optional server-side Google PageSpeed key                                                     |
+| `LIGHTHOUSE_SANDBOX_SNAPSHOT_ID` | Optional prepared browser-worker snapshot for faster isolated audits                          |
 
-See [Preview scope](docs/PREVIEW_SCOPE.md) for the experience contract, evidence language and review checklist.
+On Vercel, the sandbox SDK uses the deployment's scoped OIDC authorization. Local sandbox execution requires supported Vercel sandbox authentication. The application does not pass its database, operator or provider credentials into the audit VM.
+
+The operator-only `POST /api/internal/scans/warm` endpoint prepares a browser-worker snapshot. It creates billable infrastructure and returns a snapshot ID for server configuration. Prepared snapshots expire after 30 days and must be renewed. A failed audit produces an unmeasured result rather than a fabricated score. The scheduled cleanup endpoint removes expired records and marks stale jobs unavailable.
+
+The scan API fails closed when required configuration is missing. Email, accounts or an OpenAI key are not prerequisites for this feature.
+
+## Safety, access and usage limits
+
+- Only public HTTP/HTTPS websites on their standard ports are accepted. Credentials, query parameters, private/local/reserved addresses and sign-in/account/payment paths are rejected. The audit starts at the homepage.
+- Native HTML requests pin validated DNS results into the actual connection. Every redirect is revalidated; follow-up pages stay on the final homepage's origin. HTTPS-to-HTTP downgrades are rejected.
+- The scanner respects `robots.txt`, uses bounded requests, body sizes and time windows, and stops when a robots policy cannot safely be established. It does not bypass access challenges or submit forms.
+- The browser audit runs inside a temporary VM with private/special network ranges denied, bounded runtime and request controls. It is not a vulnerability scanner.
+- Scan access uses a random 256-bit capability token stored separately on the initiating device. Only its hash is stored on the server. Polling requires that token in an authorization header; there is no public scan directory or user-account system.
+- Supabase tables and RPCs are unavailable to anonymous/authenticated client roles; the application uses server-only service access.
+- Per client request identifier: **3 submissions per rolling hour and 10 per rolling 24 hours**, including cache hits. The identifier is an HMAC of the proxy-provided client IP, not a raw IP stored in the database.
+- Across the pilot: **30 new jobs per UTC day and 300 per UTC calendar month**. Failed or unavailable new jobs still consume that allowance. Database reservations serialize quota checks to prevent concurrent overspend.
+- Existing active jobs are shared for the same origin. Usable results may be reused for 24 hours under the same scanner/rubric versions. An explicit fresh rescan has a 15-minute origin cooldown. Request limits are enforced even when a cached result is available.
+
+## Data and privacy
+
+Questionnaire answers, owner context, action progress, assessment history, local scoring rules and saved report copies remain in this browser's local storage. They have no account backup or cross-device synchronization. Another person using the same browser profile can access them.
+
+Starting a live check sends the public website URL to the scan backend. Public website evidence, scan status, hashed access grants and hashed request-limit identifiers have a **30-day server retention window**. Results become inaccessible at expiry; the daily cleanup removes expired records. Aggregate day/month counters retain no website URL, scan ID or client identifier. Saving or clearing a local report does not change the server retention window.
+
+Private scan access tokens are stored separately from report data and are excluded from normal and recovery exports. Clearing this device's data removes local answers, reports, rules and tokens. It does not immediately erase server scan records or stop an already queued scan. Server expiry and cleanup handle those records separately.
+
+Do not enter credentials, client identities, matter narratives, privileged information, payment details or individual employee compensation. Inspect report exports before sharing them. The local scoring editor is a demonstration without authenticated administration or protection against deliberate local changes.
+
+## Deferred features
+
+Email delivery, magic-link/login accounts, cross-device questionnaire storage, protected shared administration, AI-generated copy review, ML or peer-derived scoring, public leaderboards/profiles, CRM/HubSpot sync, teammate invitations, uploads, custom domains and continuous monitoring remain outside this release. A leaderboard preference does not publish anything.
+
+See [Preview scope](docs/PREVIEW_SCOPE.md) for the evidence language and review checklist.

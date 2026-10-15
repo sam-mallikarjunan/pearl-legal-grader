@@ -1,4 +1,6 @@
 node_modules/
+app/.well-known/workflow/
+supabase/.temp/
 .next/
 out/
 .vercel/
@@ -8,3 +10,4 @@ out/
 test-results/
 playwright-report/
 .DS_Store
+/.swc

@@ -5,8 +5,30 @@ import {
 } from "./types";
 import { DEFAULT_RELEASE } from "./catalog";
 import { validateRelease } from "./scoring";
+import { isWebsiteScanResult, type WebsiteScanResult } from "./website/types";
 
 export const STORAGE_KEY = "fount.practice-grader.preview.v1";
+// Keep scan credentials separate so normal and recovery exports never contain them.
+export const SCAN_ACCESS_KEY = "fount.practice-grader.scan-access.v1";
+export type WebsiteScanStatus =
+  | "starting"
+  | "queued"
+  | "running"
+  | "complete"
+  | "partial"
+  | "unavailable";
+export interface WebsiteScanSession {
+  localId: string;
+  practiceId: string;
+  url: string;
+  createdAt: string;
+  scanId?: string;
+  status: WebsiteScanStatus;
+  stage: string;
+  cached?: boolean;
+  result?: WebsiteScanResult;
+  error?: string;
+}
 export type ActionState = "todo" | "done" | "deferred";
 export interface SavedAssessment {
   id: string;
@@ -16,6 +38,7 @@ export interface SavedAssessment {
   label: string;
   isSample: boolean;
   assessment: PracticeAssessment;
+  websiteScan?: WebsiteScanResult;
 }
 export interface PreviewPreferences {
   reminders: boolean;
@@ -30,6 +53,7 @@ export interface PreviewStore {
   assessments: SavedAssessment[];
   actionStates: Record<string, ActionState>;
   preferences: PreviewPreferences;
+  websiteSessions?: WebsiteScanSession[];
 }
 
 export function emptyStore(): PreviewStore {
@@ -46,6 +70,7 @@ export function emptyStore(): PreviewStore {
       benchmarking: false,
       leaderboard: false,
     },
+    websiteSessions: [],
   };
 }
 
@@ -326,6 +351,11 @@ export function parseStore(raw: string | null): PreviewStore | null {
         !validAssessment(entry.assessment)
       )
         return null;
+      if (
+        entry.websiteScan !== undefined &&
+        (!isWebsiteScanResult(entry.websiteScan) || entry.isSample)
+      )
+        return null;
     }
     // A baseline may age out of the bounded device history. Where it remains,
     // it must refer to the same practice and the same sample/real-data kind.
@@ -356,7 +386,76 @@ export function parseStore(raw: string | null): PreviewStore | null {
       )
     )
       return null;
+    if (
+      v.websiteSessions !== undefined &&
+      (!Array.isArray(v.websiteSessions) ||
+        v.websiteSessions.length > 40 ||
+        !v.websiteSessions.every(validWebsiteSession) ||
+        new Set(v.websiteSessions.map((session) => session.localId)).size !==
+          v.websiteSessions.length)
+    )
+      return null;
     return v as unknown as PreviewStore;
+  } catch {
+    return null;
+  }
+}
+
+function validWebsiteSession(value: unknown): value is WebsiteScanSession {
+  if (!isRecord(value)) return false;
+  return (
+    isString(value.localId) &&
+    !!value.localId.trim() &&
+    isString(value.practiceId) &&
+    !!value.practiceId.trim() &&
+    value.practiceId !== "sample-juniper" &&
+    isString(value.url) &&
+    normalizeWebsite(value.url) !== null &&
+    isString(value.createdAt) &&
+    Number.isFinite(Date.parse(value.createdAt)) &&
+    (value.scanId === undefined ||
+      (isString(value.scanId) &&
+        /^[a-zA-Z0-9_-]{8,150}$/.test(value.scanId))) &&
+    isOneOf(value.status, [
+      "starting",
+      "queued",
+      "running",
+      "complete",
+      "partial",
+      "unavailable",
+    ]) &&
+    isString(value.stage) &&
+    value.stage.length <= 300 &&
+    (value.cached === undefined || typeof value.cached === "boolean") &&
+    (value.error === undefined ||
+      (isString(value.error) && value.error.length <= 2000)) &&
+    (value.result === undefined
+      ? !["complete", "partial"].includes(value.status as string)
+      : isWebsiteScanResult(value.result) &&
+        value.result.status === value.status) &&
+    !Object.prototype.hasOwnProperty.call(value, "accessToken")
+  );
+}
+
+export function parseScanAccess(
+  raw: string | null,
+): Record<string, string> | null {
+  if (!raw) return {};
+  if (raw.length > 50_000) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (
+      !isRecord(value) ||
+      Object.keys(value).length > 40 ||
+      !Object.entries(value).every(
+        ([id, token]) =>
+          /^[a-zA-Z0-9_-]{8,150}$/.test(id) &&
+          isString(token) &&
+          /^[a-zA-Z0-9_-]{24,512}$/.test(token),
+      )
+    )
+      return null;
+    return value as Record<string, string>;
   } catch {
     return null;
   }

@@ -5,16 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "next dev --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start --hostname 127.0.0.1",
     "typecheck": "tsc --noEmit",
-    "test": "node --import tsx --test lib/*.test.ts"
+    "test": "node --import tsx --test lib/*.test.ts lib/server/*.test.ts lib/website/*.test.ts"
   },
   "dependencies": {
+    "@vercel/sandbox": "3.8.0",
+    "cheerio": "1.2.0",
     "lucide-react": "1.57.0",
     "next": "16.4.1",
     "react": "19.3.1",
-    "react-dom": "19.3.1"
+    "react-dom": "19.3.1",
+    "workflow": "5.2.2"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
@@ -25,7 +28,7 @@
     "typescript": "5.9.3"
   },
   "engines": {
-    "node": ">=24"
+    "node": "24.x"
   },
   "packageManager": "pnpm@11.25.0"
 }

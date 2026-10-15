@@ -32,6 +32,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AdminPanel from "./AdminPanel";
+import WebsiteScanPanel, { useWebsiteScans } from "./WebsiteScanPanel";
+import type { WebsiteScanResult } from "../lib/website/types";
 import { DEFAULT_RELEASE } from "../lib/catalog";
 import { assessPractice, getQuestionApplicability } from "../lib/scoring";
 import { SAMPLE_ANSWERS, SAMPLE_CONTEXT, SAMPLE_CONTROLS } from "../lib/demo";
@@ -323,7 +325,11 @@ function ActionCard({
   );
 }
 
-export default function GraderApp() {
+export default function GraderApp({
+  websiteScansEnabled = false,
+}: {
+  websiteScansEnabled?: boolean;
+}) {
   const [store, setStore] = useState<PreviewStore>(emptyStore);
   const [loaded, setLoaded] = useState(false);
   const [storageWarning, setStorageWarning] = useState("");
@@ -346,6 +352,16 @@ export default function GraderApp() {
   const [baselineId, setBaselineId] = useState<string | null>(null);
   const [detailDomain, setDetailDomain] = useState<DomainId | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const websiteScans = useWebsiteScans(
+    store,
+    setStore,
+    loaded,
+    !unreadableData,
+  );
+  const [contextSuggestion, setContextSuggestion] =
+    useState<WebsiteScanResult | null>(null);
+  const [suggestedPracticeArea, setSuggestedPracticeArea] = useState("");
+  const [suggestedJurisdiction, setSuggestedJurisdiction] = useState("");
 
   useEffect(() => {
     try {
@@ -395,6 +411,28 @@ export default function GraderApp() {
     store.assessments[0] ??
     null;
   const report = current?.assessment;
+  const draftScan = (store.websiteSessions ?? []).find(
+    (session) => session.practiceId === practiceId,
+  );
+  const latestForPractice =
+    current &&
+    store.assessments.find((entry) => entry.practiceId === current.practiceId)
+      ?.id === current.id;
+  const reportScan =
+    current &&
+    !current.isSample &&
+    report?.contextSnapshot.websiteStatus === "has_site" &&
+    latestForPractice
+      ? (store.websiteSessions ?? []).find(
+          (session) => session.practiceId === current.practiceId,
+        )
+      : undefined;
+  const resumableScan = (store.websiteSessions ?? []).find(
+    (session) =>
+      !store.assessments.some(
+        (entry) => entry.practiceId === session.practiceId,
+      ),
+  );
   const goal = goalFor(context);
   const example = useMemo(
     () =>
@@ -427,13 +465,31 @@ export default function GraderApp() {
     setDetailDomain(null);
   }
   function start(noSite = false) {
-    const normalized =
+    let normalized =
       noSite || !website.trim() ? null : normalizeWebsite(website);
     if (!noSite && website.trim() && !normalized) {
       setWebsiteError(
         "Enter a website such as yourfirm.com, or choose the no-website option.",
       );
       return;
+    }
+    if (normalized && websiteScansEnabled) {
+      const publicUrl = new URL(normalized);
+      if (publicUrl.port) {
+        setWebsiteError(
+          "Use a standard public address without a custom port, or clear the URL to continue without website checks.",
+        );
+        return;
+      }
+      if (publicUrl.search || publicUrl.hash) {
+        publicUrl.search = "";
+        publicUrl.hash = "";
+        normalized = publicUrl.href;
+        setWebsite(normalized);
+        notify(
+          "Query parameters and page fragments were removed before checking the public page.",
+        );
+      }
     }
     setWebsiteError("");
     setContext({
@@ -444,12 +500,15 @@ export default function GraderApp() {
     setAnswers({});
     setControls({});
     setIsSample(false);
-    setPracticeId(crypto.randomUUID());
+    const newPracticeId = crypto.randomUUID();
+    setPracticeId(newPracticeId);
     setBaselineId(null);
     setWizardStep(0);
     setModule("operations");
     setAssessmentRelease(structuredClone(store.activeRelease));
     navigate("assessment");
+    if (normalized && websiteScansEnabled)
+      void websiteScans.begin(normalized, newPracticeId);
   }
   function saveAssessment(
     nextContext = context,
@@ -477,6 +536,15 @@ export default function GraderApp() {
           : "Your practice",
       isSample: sample,
       assessment,
+      websiteScan:
+        !sample && nextContext.websiteStatus === "has_site"
+          ? structuredClone(
+              draftScan?.result ??
+                (current?.practiceId === practiceId
+                  ? current.websiteScan
+                  : undefined),
+            )
+          : undefined,
     };
     setStore((s) => ({
       ...s,
@@ -494,6 +562,94 @@ export default function GraderApp() {
       store.activeRelease,
       null,
     );
+  }
+  function saveWebsiteSnapshot() {
+    if (!current || current.isSample || !reportScan?.result) return;
+    const newId = crypto.randomUUID();
+    const entry: SavedAssessment = {
+      ...structuredClone(current),
+      id: newId,
+      baselineId: current.id,
+      createdAt: new Date().toISOString(),
+      websiteScan: structuredClone(reportScan.result),
+    };
+    setStore((previous) => ({
+      ...previous,
+      assessments: [entry, ...previous.assessments].slice(0, 30),
+      actionStates: {
+        ...previous.actionStates,
+        ...Object.fromEntries(
+          Object.entries(previous.actionStates)
+            .filter(([key]) => key.startsWith(`${current.id}:`))
+            .map(([key, value]) => [
+              key.replace(`${current.id}:`, `${newId}:`),
+              value,
+            ]),
+        ),
+      },
+    }));
+    setSelectedId(newId);
+    notify(
+      "Website evidence saved in a new report. Your earlier report is unchanged.",
+    );
+  }
+  function rescanReport() {
+    if (
+      !current ||
+      current.isSample ||
+      report?.contextSnapshot.websiteStatus !== "has_site" ||
+      !report.contextSnapshot.websiteUrl
+    )
+      return;
+    if (!latestForPractice) {
+      const entry: SavedAssessment = {
+        ...structuredClone(current),
+        id: crypto.randomUUID(),
+        baselineId: current.id,
+        createdAt: new Date().toISOString(),
+      };
+      setStore((previous) => ({
+        ...previous,
+        assessments: [entry, ...previous.assessments].slice(0, 30),
+        actionStates: {
+          ...previous.actionStates,
+          ...Object.fromEntries(
+            Object.entries(previous.actionStates)
+              .filter(([key]) => key.startsWith(`${current.id}:`))
+              .map(([key, value]) => [
+                key.replace(`${current.id}:`, `${entry.id}:`),
+                value,
+              ]),
+          ),
+        },
+      }));
+      setSelectedId(entry.id);
+      notify(
+        "A new report is open for this website check. The earlier report is unchanged.",
+      );
+    }
+    void websiteScans.begin(
+      report.contextSnapshot.websiteUrl,
+      current.practiceId,
+      true,
+    );
+  }
+  function resumeWebsiteCheck() {
+    if (!resumableScan) return;
+    setPracticeId(resumableScan.practiceId);
+    setContext({
+      ...EMPTY_CONTEXT,
+      websiteStatus: "has_site",
+      websiteUrl: resumableScan.url,
+    });
+    setAnswers({});
+    setControls({});
+    setIsSample(false);
+    setBaselineId(null);
+    setAssessmentRelease(structuredClone(store.activeRelease));
+    setWizardStep(0);
+    setModule("operations");
+    navigate("assessment");
   }
   function continueAssessment(domain: DomainId) {
     if (!current) return start();
@@ -533,6 +689,7 @@ export default function GraderApp() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   function clearData() {
+    websiteScans.clear();
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
@@ -552,6 +709,7 @@ export default function GraderApp() {
     setUnreadableData(null);
     setModal(null);
     setStorageWarning("");
+    setContextSuggestion(null);
     navigate("home");
     notify("Assessment history and preferences cleared from this preview.");
   }
@@ -625,8 +783,9 @@ export default function GraderApp() {
                 </p>
               )}
               <p id="url-help" className="fine-print">
-                Preview: your URL provides context. Live website scanning comes
-                later.
+                {websiteScansEnabled
+                  ? "We’ll inspect a few public pages while you answer. Public scan access expires after 30 days; expired records are removed during scheduled cleanup. Your business answers stay in this browser."
+                  : "Live website checks are not available on this deployment yet. Your URL provides context for the practice assessment."}
               </p>
             </form>
             <button className="text-link no-site" onClick={() => start(true)}>
@@ -647,6 +806,18 @@ export default function GraderApp() {
                 Saved on this device
               </span>
             </div>
+            {resumableScan && (
+              <div className="scan-resume">
+                <Globe2 size={19} />
+                <div>
+                  <strong>Your website check is saved on this device.</strong>
+                  <p>{resumableScan.url}</p>
+                  <button className="text-link" onClick={resumeWebsiteCheck}>
+                    Return to the checkup <ArrowRight size={14} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <div className="hero-visual">
             <div className="visual-orbit orbit-one" />
@@ -841,6 +1012,53 @@ export default function GraderApp() {
               account credentials or private documents.
             </p>
           </div>
+          {!isSample && context.websiteStatus === "has_site" && (
+            <WebsiteScanPanel
+              enabled={websiteScansEnabled}
+              compact
+              session={draftScan}
+              snapshot={
+                current?.practiceId === practiceId
+                  ? current.websiteScan
+                  : undefined
+              }
+              onRescan={
+                context.websiteUrl
+                  ? () =>
+                      void websiteScans.begin(
+                        context.websiteUrl!,
+                        practiceId,
+                        true,
+                      )
+                  : undefined
+              }
+              onRetryStatus={
+                draftScan
+                  ? () => websiteScans.retryStatus(draftScan)
+                  : undefined
+              }
+              onConfirmContext={(result) => {
+                setContextSuggestion(result);
+                setSuggestedPracticeArea(
+                  result.suggestedContext.practiceAreas.find((area) =>
+                    [
+                      "Family law",
+                      "Estate planning",
+                      "Immigration",
+                      "Criminal defense",
+                      "Personal injury",
+                      "Business law",
+                      "Employment",
+                      "Real estate",
+                      "General practice",
+                      "Other",
+                    ].includes(area),
+                  ) ?? "",
+                );
+                setSuggestedJurisdiction("");
+              }}
+            />
+          )}
           {isSample && <span className="tag">Editing a fictional example</span>}
         </div>
         <div className="assessment-main card">
@@ -859,7 +1077,8 @@ export default function GraderApp() {
           </div>
           <p className="draft-save-note">
             Your report saves when you select “See my report.” Refreshing clears
-            an unfinished checkup.
+            unfinished questionnaire answers; a started website check can still
+            be retrieved after you save a report.
             {baselineId
               ? " Prior answers are shown for review; other areas retain their earlier answers and rubric."
               : ""}
@@ -1276,7 +1495,7 @@ export default function GraderApp() {
           <span>
             {current.isSample
               ? "Fictional example. These answers and findings do not describe your firm or a website we inspected."
-              : "Based on your answers. Your website has not been scanned, and operating practices have not been independently verified."}
+              : "Operating readiness is based on your answers. Any live public website evidence is shown separately below and does not verify your operating practices."}
           </span>
           <span className="tag">Provisional rubric</span>
         </div>
@@ -1315,6 +1534,28 @@ export default function GraderApp() {
             </span>
           </div>
         </div>
+        {!current.isSample && (
+          <WebsiteScanPanel
+            enabled={websiteScansEnabled}
+            session={reportScan}
+            snapshot={current.websiteScan}
+            noSite={report.contextSnapshot.websiteStatus === "no_site"}
+            onRescan={
+              report.contextSnapshot.websiteStatus === "has_site" &&
+              report.contextSnapshot.websiteUrl
+                ? rescanReport
+                : undefined
+            }
+            onSaveSnapshot={
+              reportScan?.result ? saveWebsiteSnapshot : undefined
+            }
+            onRetryStatus={
+              reportScan
+                ? () => websiteScans.retryStatus(reportScan)
+                : undefined
+            }
+          />
+        )}
         <div className="section-heading">
           <div>
             <span className="eyebrow">A PRACTICAL PLACE TO BEGIN</span>
@@ -1819,7 +2060,7 @@ export default function GraderApp() {
             {
               icon: LockKeyhole,
               title: "You choose what to share",
-              text: "This preview stores answers and progress on this device. It sends no reports or marketing, uploads no business answers, and publishes no leaderboard entries.",
+              text: "Questionnaire answers and action progress stay on this device. A website check sends the public URL to our scanner and mobile audit service. Public scan access expires after 30 days; expired records are removed during scheduled cleanup. Saved reports stay in this browser until you clear them. No emails, private business answers or leaderboard entries are sent.",
             },
           ].map((x) => {
             const Icon = x.icon;
@@ -1884,6 +2125,26 @@ export default function GraderApp() {
             <ArrowUpRight size={18} />
           </a>
         </div>
+        <div className="card rubric-explainer">
+          <div>
+            <span className="eyebrow">A SEPARATE WEBSITE RUBRIC</span>
+            <h2>Observed website evidence has its own score.</h2>
+            <p>
+              Measured public checks are combined using their published weights.
+              Unavailable checks are excluded, never assigned zero. Evidence
+              coverage is shown separately, and a score is withheld when too
+              little is measurable. The report keeps its scan date, supporting
+              pages, scanner version and rubric version.
+            </p>
+            <p>
+              Inspecting page markup does not confirm that a booking flow works,
+              analytics are correct, or the whole site is accessible. The
+              Lighthouse laboratory audit simulates one mobile visit. It is not
+              real-user field data, a compliance certification or a prediction
+              of clients.
+            </p>
+          </div>
+        </div>
         <div className="button-row">
           <button className="btn btn-primary" onClick={() => start()}>
             Find my starting point
@@ -1939,6 +2200,14 @@ export default function GraderApp() {
           Preview preferences are saved on this device. They trigger no emails,
           research contribution or public sharing.
         </p>
+        <p className="fine-print">
+          Website checks send a public URL for inspection. Public scan access
+          expires after 30 days, and expired server records are removed during
+          scheduled cleanup. Business questionnaire answers stay in this
+          browser. Clearing this device removes local history and scan access,
+          but does not cancel queued scans or delete public findings already
+          stored on the server.
+        </p>
         <div className="preference-list">
           {items.map((item) => (
             <label className="preference" key={item.key}>
@@ -1992,7 +2261,9 @@ export default function GraderApp() {
       <div className="preview-bar">
         <span className="preview-pill">PREVIEW</span>
         <span>
-          Explore the experience. Live scans, accounts and email come later.
+          {websiteScansEnabled
+            ? "Live website checks + owner-reported answers. Accounts and email come later."
+            : "Practice assessment preview. Website checks are unavailable on this deployment."}
         </span>
         <button onClick={() => setModal("preferences")}>
           <LockKeyhole size={12} />
@@ -2052,6 +2323,12 @@ export default function GraderApp() {
           {storageWarning}
           <button onClick={exportData}>Download data</button>
           <button onClick={() => setModal("clear")}>Clear saved data</button>
+        </div>
+      )}
+      {websiteScans.accessWarning && (
+        <div className="storage-warning" role="status">
+          {websiteScans.accessWarning}
+          <button onClick={() => setModal("clear")}>Clear this device</button>
         </div>
       )}
       <main ref={mainRef} id="main-content" tabIndex={-1}>
@@ -2121,8 +2398,11 @@ export default function GraderApp() {
         >
           <p>
             This removes saved assessments, action progress, preferences and
-            local rubric changes. Download a copy first if you want to keep
-            them.
+            local rubric changes, plus private scan access on this device.
+            Download a copy first if you want to keep your reports. It does not
+            cancel queued scans or delete public website findings already stored
+            on the server. Public scan access expires after 30 days, and expired
+            records are removed during scheduled cleanup.
           </p>
           <div className="button-row">
             <button className="btn btn-danger" onClick={clearData}>
@@ -2134,6 +2414,86 @@ export default function GraderApp() {
               onClick={() => setModal(null)}
             >
               Keep my data
+            </button>
+          </div>
+        </Dialog>
+      )}
+      {contextSuggestion && (
+        <Dialog
+          title="Review public practice clues"
+          close={() => setContextSuggestion(null)}
+        >
+          <p>
+            We found the following public text clues. Confirm any detail before
+            adding it. Locations mentioned on a website do not establish where
+            you are licensed or serve clients.
+          </p>
+          <p className="scan-context-clues">
+            {[
+              contextSuggestion.suggestedContext.firmName,
+              ...contextSuggestion.suggestedContext.practiceAreas,
+              ...contextSuggestion.suggestedContext.locations,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+          <label className="field-label">
+            Main practice area
+            <select
+              aria-label="Suggested main practice area"
+              value={suggestedPracticeArea}
+              onChange={(event) => setSuggestedPracticeArea(event.target.value)}
+            >
+              <option value="">Keep my current answer</option>
+              {[
+                "Family law",
+                "Estate planning",
+                "Immigration",
+                "Criminal defense",
+                "Personal injury",
+                "Business law",
+                "Employment",
+                "Real estate",
+                "General practice",
+                "Other",
+              ].map((area) => (
+                <option key={area}>{area}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field-label">
+            Confirmed service jurisdiction
+            <input
+              aria-label="Confirmed service jurisdiction"
+              value={suggestedJurisdiction}
+              maxLength={80}
+              placeholder="Type only a jurisdiction you actually serve"
+              onChange={(event) => setSuggestedJurisdiction(event.target.value)}
+            />
+          </label>
+          <div className="button-row">
+            <button
+              className="btn btn-primary"
+              onClick={() => {
+                setContext((previous) => ({
+                  ...previous,
+                  practiceArea: suggestedPracticeArea || previous.practiceArea,
+                  jurisdiction:
+                    suggestedJurisdiction.trim() || previous.jurisdiction,
+                }));
+                setContextSuggestion(null);
+                notify(
+                  "Confirmed details added. No questionnaire answers or scores changed.",
+                );
+              }}
+            >
+              Use my confirmed details <Check size={15} />
+            </button>
+            <button
+              className="quiet-button"
+              onClick={() => setContextSuggestion(null)}
+            >
+              Keep my answers
             </button>
           </div>
         </Dialog>
