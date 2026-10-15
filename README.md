@@ -53,7 +53,7 @@ Copy `.env.example` to an ignored `.env.local` for local configuration. Configur
 | `PAGESPEED_API_KEY`              | Optional server-side Google PageSpeed key                                                     |
 | `LIGHTHOUSE_SANDBOX_SNAPSHOT_ID` | Optional prepared browser-worker snapshot for faster isolated audits                          |
 
-On Vercel, the sandbox SDK uses the deployment's scoped OIDC authorization. Local sandbox execution requires supported Vercel sandbox authentication. The application does not pass its database, operator or provider credentials into the audit VM.
+On Vercel, the sandbox SDK uses the deployment's scoped OIDC authorization. Local sandbox execution requires supported Vercel sandbox authentication. The application does not pass its database, operator or provider credentials into the audit VM. Native firewall rules deny private and reserved IPv4 destinations. IPv6 is disabled through privileged operating-system settings and both settings are verified before every audit, including when restoring a snapshot; failure leaves the audit unmeasured.
 
 The operator-only `POST /api/internal/scans/warm` endpoint prepares a browser-worker snapshot. It creates billable infrastructure and returns a snapshot ID for server configuration. Prepared snapshots expire after 30 days and must be renewed. A failed audit produces an unmeasured result rather than a fabricated score. The scheduled cleanup endpoint removes expired records and marks stale jobs unavailable.
 

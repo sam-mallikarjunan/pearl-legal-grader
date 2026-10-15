@@ -38,7 +38,11 @@ const fixture = {
 const validate = async () => ({ address: "8.8.8.8", family: 4 as const });
 
 function fakeSandbox(
-  options: { failingCommand?: number; result?: Buffer | null } = {},
+  options: {
+    failingCommand?: number;
+    result?: Buffer | null;
+    ipv6Values?: string;
+  } = {},
 ) {
   const events: string[] = [];
   const files = new Map<string, Buffer>();
@@ -57,7 +61,9 @@ function fakeSandbox(
       return {
         exitCode: options.failingCommand === calls ? 1 : 0,
         async stdout() {
-          return "";
+          return command.cmd === "sysctl" && command.args[0] === "-n"
+            ? (options.ipv6Values ?? "1\n1\n")
+            : "";
         },
       };
     },
@@ -132,6 +138,8 @@ test("snapshot audit restricts egress before execution and always stops the disp
     snapshotId: "snap_pinned",
   });
   assert.deepEqual(sandbox.events, [
+    "command:sysctl",
+    "command:sysctl",
     "write",
     "restrict",
     "command:node",
@@ -141,7 +149,7 @@ test("snapshot audit restricts egress before execution and always stops the disp
 });
 
 test("cold bootstrap failure stops the VM before target content executes", async () => {
-  const sandbox = fakeSandbox({ failingCommand: 1 });
+  const sandbox = fakeSandbox({ failingCommand: 3 });
   const runner = createSandboxLighthouseRunner(async () => sandbox, validate);
   const result = await runner(url);
   assert.equal(result.status, "unavailable");
@@ -196,12 +204,13 @@ test("website URL remains JSON data and never appears in executable source or co
   );
   await runner(unusual);
   assert.equal(
-    JSON.parse(sandbox.files.get("pearl-lighthouse-input.json")!.toString())
-      .url,
+    JSON.parse(
+      sandbox.files.get("/vercel/pearl-lighthouse-input.json")!.toString(),
+    ).url,
     unusual,
   );
   assert.doesNotMatch(
-    sandbox.files.get("pearl-lighthouse.mjs")!.toString(),
+    sandbox.files.get("/vercel/pearl-lighthouse.mjs")!.toString(),
     /touch%20pwned/,
   );
 });
@@ -314,4 +323,26 @@ test("operator diagnostics retain bounded provider codes and discard sensitive e
     lighthouseSetupDiagnostic(new LighthouseSetupError("create", oidcError)),
     { stage: "create", classification: "oidc_missing" },
   );
+});
+
+test("IPv6 disable and verification fail closed before bootstrap or website execution", async () => {
+  for (const options of [
+    { failingCommand: 1 },
+    { failingCommand: 2 },
+    { ipv6Values: "0\n1\n" },
+    { ipv6Values: "1\n" },
+  ]) {
+    const sandbox = fakeSandbox(options);
+    const runner = createSandboxLighthouseRunner(
+      async () => sandbox,
+      validate,
+      "snap_pinned",
+    );
+    assert.equal((await runner(url)).status, "unavailable");
+    assert.equal(sandbox.events.at(-1), "stop");
+    assert.ok(!sandbox.events.includes("command:node"));
+    assert.ok(!sandbox.events.includes("command:npm"));
+    assert.equal(sandbox.files.size, 0);
+  }
+  assert.ok(LIGHTHOUSE_DENIED_SUBNETS.every((range) => !range.includes(":")));
 });

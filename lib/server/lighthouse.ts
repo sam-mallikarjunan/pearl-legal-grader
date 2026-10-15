@@ -9,8 +9,9 @@ export const LIGHTHOUSE_RUNTIME_PACKAGES = [
 ] as const;
 export const LIGHTHOUSE_SANDBOX_TIMEOUT_MS = 100_000;
 
-// Deny rules override the public wildcard, including after a DNS rebind. IPv6 is
-// deliberately disabled for this pilot instead of incompletely classifying it.
+// Native IPv4 deny rules override the public wildcard after a DNS rebind.
+// The provider rejects IPv6 CIDRs; IPv6 is separately disabled and verified in
+// every VM before installing tools or executing website content.
 export const LIGHTHOUSE_DENIED_SUBNETS = [
   "0.0.0.0/8",
   "10.0.0.0/8",
@@ -28,10 +29,10 @@ export const LIGHTHOUSE_DENIED_SUBNETS = [
   "224.0.0.0/4",
   "240.0.0.0/4",
   "168.63.129.16/32",
-  "::/0",
 ] as const;
 
-const RUNTIME_DIRECTORY = "/vercel/sandbox";
+// Current managed node:24 image reports /vercel as its working directory.
+const RUNTIME_DIRECTORY = "/vercel";
 const RUNTIME_SCRIPT = `${RUNTIME_DIRECTORY}/pearl-lighthouse.mjs`;
 const RESULT_FILE = `${RUNTIME_DIRECTORY}/pearl-lighthouse-result.json`;
 const CACHE_DIRECTORY = `${RUNTIME_DIRECTORY}/.chrome`;
@@ -73,6 +74,7 @@ type SandboxFactory = (
 
 export type LighthouseSetupStage =
   | "create"
+  | "network"
   | "install"
   | "browserinstall"
   | "chromesmoke"
@@ -214,7 +216,7 @@ import { isIP } from "node:net";
 import puppeteer from "puppeteer";
 import lighthouse from "lighthouse";
 
-const input = JSON.parse(await fs.readFile("/vercel/sandbox/pearl-lighthouse-input.json", "utf8"));
+const input = JSON.parse(await fs.readFile("/vercel/pearl-lighthouse-input.json", "utf8"));
 const target = new URL(input.url);
 const deny = ${JSON.stringify(LIGHTHOUSE_DENIED_SUBNETS.filter((range) => !range.includes(":")))};
 const privatePath = /(?:^|\/)(?:login|log-in|client-login|clientlogin|signin|sign-in|signout|logout|account|accounts|my-account|client-portal|clientportal|portal|wp-admin|wp-login\.php|admin|dashboard|private|auth|oauth|checkout|cart|payment|payments|pay-invoice|reset-password|password)(?:\/|\.|$)/i;
@@ -317,7 +319,7 @@ try {
   const lhr = audit.lhr;
   const summary = { lighthouseVersion: lhr.lighthouseVersion, categories: Object.fromEntries(Object.entries(lhr.categories ?? {}).map(([id, category]) => [id, { score: category.score }])), audits: {} };
   for (const [id, entry] of Object.entries(lhr.audits ?? {}).slice(0, 500)) summary.audits[id] = { score: entry.score, title: entry.title, description: entry.description, numericValue: entry.numericValue, details: { overallSavingsMs: entry.details?.overallSavingsMs } };
-  await fs.writeFile("/vercel/sandbox/pearl-lighthouse-result.json", JSON.stringify(summary));
+  await fs.writeFile("/vercel/pearl-lighthouse-result.json", JSON.stringify(summary));
 } catch {
   process.exitCode = 2;
 } finally {
@@ -349,6 +351,35 @@ async function auditCommand(
     env: { PUPPETEER_CACHE_DIR: CACHE_DIRECTORY },
   });
   if (result.exitCode !== 0) throw new Error("audit_command_failed");
+  return result;
+}
+
+async function disableSandboxIpv6(sandbox: AuditSandbox) {
+  await setupStage("network", async () => {
+    await auditCommand(
+      sandbox,
+      "sysctl",
+      [
+        "-w",
+        "net.ipv6.conf.all.disable_ipv6=1",
+        "net.ipv6.conf.default.disable_ipv6=1",
+      ],
+      true,
+    );
+    const result = await auditCommand(
+      sandbox,
+      "sysctl",
+      [
+        "-n",
+        "net.ipv6.conf.all.disable_ipv6",
+        "net.ipv6.conf.default.disable_ipv6",
+      ],
+      true,
+    );
+    const values = (await result.stdout()).trim().split(/\s+/);
+    if (values.length !== 2 || values.some((value) => value !== "1"))
+      throw new Error("network_verification_failed");
+  });
 }
 
 async function bootstrapRuntime(sandbox: AuditSandbox) {
@@ -419,14 +450,15 @@ export function createSandboxLighthouseRunner(
           image: "vercel/sandbox/node:24",
         });
       }
+      await disableSandboxIpv6(sandbox);
       if (!usingSnapshot) await bootstrapRuntime(sandbox);
       await sandbox.writeFiles([
         {
-          path: "pearl-lighthouse-input.json",
+          path: `${RUNTIME_DIRECTORY}/pearl-lighthouse-input.json`,
           content: Buffer.from(JSON.stringify({ url: url.href })),
         },
         {
-          path: "pearl-lighthouse.mjs",
+          path: RUNTIME_SCRIPT,
           content: Buffer.from(lighthouseRuntimeScript()),
         },
       ]);
@@ -481,6 +513,7 @@ export async function prepareLighthouseSandboxSnapshot(): Promise<{
   );
   let snapshotted = false;
   try {
+    await disableSandboxIpv6(sandbox);
     await bootstrapRuntime(sandbox);
     await setupStage("chromesmoke", () =>
       auditCommand(sandbox, "node", [
