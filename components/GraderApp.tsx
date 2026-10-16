@@ -2432,7 +2432,7 @@ export default function GraderApp({
             Methodology
           </button>
         </nav>
-        <a className="admin-nav" href="/account">
+        <a className="admin-nav" href="/account" aria-label="Private account">
           <LockKeyhole size={16} />
           <span>Private account</span>
         </a>

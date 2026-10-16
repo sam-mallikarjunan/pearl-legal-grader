@@ -1,10 +1,115 @@
 import { randomUUID } from "node:crypto";
 import { AccountAuthError, accountAdminClient } from "./account-auth";
 
+const PROVIDER_ERROR_CODES = new Set([
+  "validation_error",
+  "missing_required_field",
+  "missing_api_key",
+  "invalid_api_key",
+  "restricted_api_key",
+  "invalid_access",
+  "invalid_from_address",
+  "invalid_to_address",
+  "invalid_region",
+  "rate_limit_exceeded",
+  "daily_quota_exceeded",
+  "monthly_quota_exceeded",
+  "idempotency_key_in_use",
+  "invalid_idempotent_request",
+  "invalid_idempotency_key",
+  "application_error",
+  "internal_server_error",
+  "not_found",
+]);
+type FailureCategory =
+  | "credentials"
+  | "sender"
+  | "idempotency"
+  | "recipient"
+  | "payload"
+  | "allowance"
+  | "other";
+/** A provider may echo credentials, recipients or message contents. Emit only fixed categories and known machine codes. */
+export async function authEmailFailureDiagnostic(response: Response): Promise<{
+  status: number;
+  category: FailureCategory;
+  providerName?: string;
+  providerCode?: string;
+}> {
+  const diagnostic: {
+    status: number;
+    category: FailureCategory;
+    providerName?: string;
+    providerCode?: string;
+  } = { status: response.status, category: "other" };
+  const reader = response.body?.getReader();
+  if (!reader) return diagnostic;
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > 16_384) return diagnostic;
+      chunks.push(part.value);
+    }
+    const value: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+      return diagnostic;
+    const fields = value as Record<string, unknown>;
+    if (
+      typeof fields.name === "string" &&
+      PROVIDER_ERROR_CODES.has(fields.name)
+    )
+      diagnostic.providerName = fields.name;
+    if (
+      typeof fields.code === "string" &&
+      PROVIDER_ERROR_CODES.has(fields.code)
+    )
+      diagnostic.providerCode = fields.code;
+    const reason = [
+      diagnostic.providerName,
+      diagnostic.providerCode,
+      typeof fields.message === "string" ? fields.message : "",
+    ]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase();
+    diagnostic.category =
+      /api[ _-]?key|credential|unauthori[sz]ed|restricted_api_key|invalid_access/.test(
+        reason,
+      )
+        ? "credentials"
+        : /sender|from[ _-]?address|sending[ _-]?domain|domain.{0,60}verif/.test(
+              reason,
+            )
+          ? "sender"
+          : /idempoten/.test(reason)
+            ? "idempotency"
+            : /recipient|to[ _-]?address/.test(reason)
+              ? "recipient"
+              : /quota|allowance|rate[ _-]?limit|daily[ _-]?limit|monthly[ _-]?limit/.test(
+                    reason,
+                  )
+                ? "allowance"
+                : /validat|payload|missing|required|invalid[ _-]?field|malformed/.test(
+                      reason,
+                    )
+                  ? "payload"
+                  : "other";
+    return diagnostic;
+  } catch {
+    return diagnostic;
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
 /** Generate an OTP through Supabase, then deliver it through the approved email provider. No SMTP credential sharing. */
 export async function sendAccountCode(email: string) {
-  const key = process.env.RESEND_API_KEY;
-  const from = process.env.GRADER_EMAIL_FROM;
+  const key = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.GRADER_EMAIL_FROM?.trim();
   if (!key || !from)
     throw new AccountAuthError(503, "Email sign-in is being configured.");
   const { data, error } = await accountAdminClient().auth.admin.generateLink({
@@ -56,9 +161,10 @@ export async function sendAccountCode(email: string) {
   }
   // Provider bodies can contain the recipient or credentials. Keep them out of logs and public errors.
   if (!response.ok) {
-    console.error("grader_auth_email_provider_failed", {
-      status: response.status,
-    });
+    console.error(
+      "grader_auth_email_provider_failed",
+      await authEmailFailureDiagnostic(response),
+    );
     throw new AccountAuthError(
       503,
       "The sign-in message could not be requested. Please try again later.",
