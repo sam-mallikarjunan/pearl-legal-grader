@@ -176,6 +176,23 @@ test("email failure diagnostics emit only fixed categories and allowlisted machi
   );
 });
 
+test("an unnamed unverified-domain error stays a sender issue without exposing its body", async () => {
+  const diagnostic = await authEmailFailureDiagnostic(
+    Response.json(
+      {
+        message:
+          "The associated domain with your API key is not verified. Please, create a new API key with full access or with a verified domain. owner@example.invalid re_PRIVATE_TOKEN 123456 PRIVATE_BODY",
+      },
+      { status: 400 },
+    ),
+  );
+  assert.deepEqual(diagnostic, { status: 400, category: "sender" });
+  assert.doesNotMatch(
+    JSON.stringify(diagnostic),
+    /owner@|re_PRIVATE_TOKEN|123456|PRIVATE_BODY|associated domain/,
+  );
+});
+
 test("a rejected sign-in email logs safe diagnostics and keeps the client error opaque", async () => {
   const names = [
     "SUPABASE_URL",

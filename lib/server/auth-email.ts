@@ -77,14 +77,14 @@ export async function authEmailFailureDiagnostic(response: Response): Promise<{
       .join(" ")
       .toLowerCase();
     diagnostic.category =
-      /api[ _-]?key|credential|unauthori[sz]ed|restricted_api_key|invalid_access/.test(
+      /sender|from[ _-]?address|sending[ _-]?domain|domain.{0,60}verif/.test(
         reason,
       )
-        ? "credentials"
-        : /sender|from[ _-]?address|sending[ _-]?domain|domain.{0,60}verif/.test(
+        ? "sender"
+        : /api[ _-]?key|credential|unauthori[sz]ed|restricted_api_key|invalid_access/.test(
               reason,
             )
-          ? "sender"
+          ? "credentials"
           : /idempoten/.test(reason)
             ? "idempotency"
             : /recipient|to[ _-]?address/.test(reason)
