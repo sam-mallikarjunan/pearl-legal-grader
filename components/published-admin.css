@@ -1,0 +1,234 @@
+.published-admin {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 36px 24px 80px;
+  color: #26334a;
+  font-family: Arial, sans-serif;
+  line-height: 1.5;
+}
+.published-admin h1 {
+  font-size: 32px;
+  margin: 0 0 12px;
+}
+.published-admin h2 {
+  font-size: 23px;
+  margin: 0 0 12px;
+}
+.published-admin p {
+  margin: 8px 0 14px;
+}
+.pa-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+.pa-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: #58706c;
+}
+.published-admin a {
+  color: #35595a;
+  text-decoration: underline;
+}
+.pa-card {
+  padding: 24px;
+  background: #fff;
+  border: 1px solid #dce3e2;
+  border-radius: 14px;
+  margin: 18px 0;
+}
+.pa-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.pa-summary code,
+.pa-summary small {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+.pa-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+.pa-wide {
+  grid-column: 1/-1;
+}
+.published-admin label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  margin: 12px 0;
+}
+.published-admin input,
+.published-admin textarea,
+.published-admin select {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #bac8c7;
+  border-radius: 7px;
+  padding: 10px 12px;
+  background: #fff;
+  color: inherit;
+  font: inherit;
+  font-weight: 400;
+}
+.published-admin input:focus,
+.published-admin textarea:focus,
+.published-admin select:focus {
+  outline: 2px solid #527e78;
+  outline-offset: 2px;
+}
+.published-admin button {
+  border: 1px solid #466a64;
+  border-radius: 7px;
+  padding: 10px 15px;
+  background: #466a64;
+  color: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+.published-admin button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pa-note {
+  font-size: 13px;
+  color: #607070;
+}
+.pa-weights {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+.pa-tabs,
+.pa-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.pa-tabs button {
+  background: #fff;
+  color: #355955;
+  border-color: #c9d4d2;
+}
+.pa-tabs .pa-selected {
+  background: #355955;
+  color: white;
+}
+.pa-question-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.pa-question {
+  border: 1px solid #dde5e3;
+  padding: 18px;
+  border-radius: 9px;
+}
+.published-admin .pa-checkbox {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+}
+.pa-checkbox input {
+  width: 16px;
+  height: 16px;
+}
+.published-admin details summary {
+  font-weight: 600;
+  cursor: pointer;
+}
+.pa-question details {
+  margin-top: 16px;
+}
+.pa-question code {
+  font-size: 12px;
+  color: #617773;
+}
+.pa-table {
+  overflow-x: auto;
+}
+.pa-table table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+  min-width: 700px;
+}
+.pa-table th,
+.pa-table td {
+  text-align: left;
+  border-bottom: 1px solid #e0e6e4;
+  padding: 12px;
+  vertical-align: top;
+}
+.pa-table thead {
+  background: #f4f7f5;
+}
+.pa-table tbody th {
+  min-width: 190px;
+}
+.pa-table details {
+  font-weight: 400;
+  margin-top: 10px;
+}
+.pa-table details p {
+  font-size: 12px;
+  margin: 4px 0;
+}
+.pa-history {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e4e9e7;
+}
+.pa-history code {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.pa-history p {
+  margin: 4px 0;
+  font-size: 14px;
+}
+.pa-json {
+  font-family: monospace !important;
+  font-size: 12px !important;
+  resize: vertical;
+}
+.pa-card[open] > summary {
+  margin-bottom: 18px;
+}
+@media (max-width: 700px) {
+  .published-admin {
+    padding: 22px 16px 60px;
+  }
+  .pa-heading,
+  .pa-history {
+    flex-direction: column;
+  }
+  .pa-card {
+    padding: 18px;
+  }
+  .pa-summary,
+  .pa-fields,
+  .pa-question-list {
+    grid-template-columns: 1fr;
+  }
+  .pa-weights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .published-admin h1 {
+    font-size: 27px;
+  }
+}

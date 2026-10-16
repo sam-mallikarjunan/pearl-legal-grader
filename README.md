@@ -1,6 +1,6 @@
 # Independent Law Practice Grader
 
-A Next.js and React assessment with browser-local practice history and an optional live website scanning backend. Owner-reported practice maturity and observed website checks have separate scores, evidence and histories.
+A Next.js and React assessment with browser-local history, optional private accounts, and a bounded live website scanner. Owner-reported practice maturity and observed website checks have separate scores, evidence and histories.
 
 The live-scan implementation is in this repository. Availability on a particular deployment depends on its database, worker and environment configuration; this document does not assert that hosted end-to-end verification has been completed.
 
@@ -13,7 +13,7 @@ pnpm install
 pnpm dev
 ```
 
-`pnpm build` creates a production build; `pnpm start` serves it. Run `pnpm typecheck` and `pnpm test` for the automated checks. Without scan configuration, the questionnaire, local reports, fictional example and local scoring editor remain available; no live scan is invented.
+`pnpm build` creates a production build; `pnpm start` serves it. Run `pnpm typecheck` and `pnpm test` for the automated checks. Without backend configuration, the questionnaire, local reports and fictional example remain available. Unavailable scans, account services and AI reviews are identified explicitly.
 
 ## Experience
 
@@ -21,8 +21,9 @@ pnpm dev
 2. When scanning is configured, a bounded website check runs while the owner answers practice questions. The questionnaire remains usable if a scan is blocked or unavailable.
 3. Confirm practice context, goals and capacity, then answer questions about concrete operating practices.
 4. View a scoped owner-reported assessment, separate website findings, evidence coverage and prioritized actions.
-5. Save dated reports, mark actions completed or deferred, and reassess later. A completion checkbox does not establish a business improvement.
-6. Explore local scoring controls to change question wording and weights and publish a new browser-local rubric version without rewriting earlier reports.
+5. Track actions, target dates and owner-reported outcomes. Reassess to create a new dated snapshot; a completion checkbox does not establish a business improvement.
+6. Optionally sign in with an emailed one-time code, explicitly save a selected report, import it on another device, or request its summary by email. Guest history is never uploaded automatically.
+7. Administrators can preview, publish and roll back shared questionnaire versions. Issued reports retain their original rules. Separate research, recognition, marketing and requested-help choices default to off.
 
 **Juniper Family Law** is an explicitly fictional solo-practice example. Its reserved `.example` URL is never scanned, and its answers are not attached to a user's real website.
 
@@ -65,7 +66,7 @@ The scan API fails closed when required configuration is missing. Email, account
 - Native HTML requests pin validated DNS results into the actual connection. Every redirect is revalidated; follow-up pages stay on the final homepage's origin. HTTPS-to-HTTP downgrades are rejected.
 - The scanner respects `robots.txt`, uses bounded requests, body sizes and time windows, and stops when a robots policy cannot safely be established. It does not bypass access challenges or submit forms.
 - The browser audit runs inside a temporary VM with private/special network ranges denied, bounded runtime and request controls. It is not a vulnerability scanner.
-- Scan access uses a random 256-bit capability token stored separately on the initiating device. Only its hash is stored on the server. Polling requires that token in an authorization header; there is no public scan directory or user-account system.
+- Scan access uses a random 256-bit capability token stored separately on the initiating device. Only its hash is stored on the server. Polling requires that token in an authorization header; there is no public scan directory. Attaching website evidence to an account requires the original private scan capability, which is verified and never included in an account export.
 - Supabase tables and RPCs are unavailable to anonymous/authenticated client roles; the application uses server-only service access.
 - Per client request identifier: **3 submissions per rolling hour and 10 per rolling 24 hours**, including cache hits. The identifier is an HMAC of the proxy-provided client IP, not a raw IP stored in the database.
 - Across the pilot: **30 new jobs per UTC day and 300 per UTC calendar month**. Failed or unavailable new jobs still consume that allowance. Database reservations serialize quota checks to prevent concurrent overspend.
@@ -73,16 +74,40 @@ The scan API fails closed when required configuration is missing. Email, account
 
 ## Data and privacy
 
-Questionnaire answers, owner context, action progress, assessment history, local scoring rules and saved report copies remain in this browser's local storage. They have no account backup or cross-device synchronization. Another person using the same browser profile can access them.
+Guest questionnaire answers, owner context, action progress and report copies remain in browser local storage. Another person using the same browser profile can access them. An account backs up only explicitly selected reports. Reports are immutable and recomputed against a known server-approved release; action progress and separately versioned preferences can be updated. Local changes to a rubric cannot become canonical cloud grades. There is no automatic merge or upload of device history.
 
 Starting a live check sends the public website URL to the scan backend. Public website evidence, scan status, hashed access grants and hashed request-limit identifiers have a **30-day server retention window**. Results become inaccessible at expiry; the daily cleanup removes expired records. Aggregate day/month counters retain no website URL, scan ID or client identifier. Saving or clearing a local report does not change the server retention window.
 
 Private scan access tokens are stored separately from report data and are excluded from normal and recovery exports. Clearing this device's data removes local answers, reports, rules and tokens. It does not immediately erase server scan records or stop an already queued scan. Server expiry and cleanup handle those records separately.
 
-Do not enter credentials, client identities, matter narratives, privileged information, payment details or individual employee compensation. Inspect report exports before sharing them. The local scoring editor is a demonstration without authenticated administration or protection against deliberate local changes.
+Do not enter credentials, client identities, matter narratives, privileged information, payment details or individual employee compensation. Inspect report exports before sharing them. Protected administration requires a verified sign-in and a server-side email allowlist. Browser-local state remains editable by its owner and is not independently verified.
 
-## Deferred features
+## Private accounts, administration and email
 
-Email delivery, magic-link/login accounts, cross-device questionnaire storage, protected shared administration, AI-generated copy review, ML or peer-derived scoring, public leaderboards/profiles, CRM/HubSpot sync, teammate invitations, uploads, custom domains and continuous monitoring remain outside this release. A leaderboard preference does not publish anything.
+Apply every committed migration in order to the dedicated Supabase project. Server-only account settings are `SUPABASE_PUBLISHABLE_KEY` (Auth API identifier), `ACCOUNTS_ENABLED=true`, and `GRADER_ADMIN_EMAILS` (exact verified addresses permitted to administer). Use the same existing server secret for database RPCs and the Auth admin API. Closed RLS and restricted RPC grants prevent direct anonymous or authenticated database access; owner authorization happens on the server. Sessions use HttpOnly, Secure production cookies and same-site mutation checks. Do not expose a service credential in browser code.
 
-See [Preview scope](docs/PREVIEW_SCOPE.md) for the evidence language and review checklist.
+Enable `AUTH_EMAIL_ENABLED` and `REPORT_EMAIL_ENABLED` only after configuring `RESEND_API_KEY`, `GRADER_EMAIL_FROM` and the trusted HTTPS `GRADER_APP_URL`. The sending key should be restricted to the verified sender domain. Supabase generates a one-time code; the server delivers it through Resend. No SMTP password is required. Requested reports use an idempotent durable outbox and authenticated delivery-status webhook (`RESEND_WEBHOOK_SECRET`). Provider acceptance and confirmed delivery are distinct states. Email contains a scoped summary and a private workspace link, not the full private operating answers. Marketing sends are not implemented.
+
+Sign-in request limits are 3 per email per rolling hour, 10 per client identifier per hour, and 50/day plus 500/month across the preview. Verification attempts are separately limited. Report email limits are 3/account/hour, 10/account/day, and 100/day plus 1,000/month globally. HMAC-only request identifiers expire after 48 hours; aggregate usage counters cannot be reset by deleting a report. Operator health shows aggregate consumption, not a provider billing statement.
+
+Account export, individual report deletion and recent-sign-in-protected account deletion are available. Deleting an account removes its Auth identity and cascades its private workspace data. Device copies, shared public website scans, provider delivery records and backups have separate retention. Daily cleanup handles expiring scanner, authentication, email and AI allowance records. AI request allowances retain owner identifiers for 48 hours; cached explanations are attached to private saved reports and cascade on report or account deletion. A clear-device action is not an account deletion.
+
+Protected scoring administration validates drafts, compares six fictional contexts, requires a reason, atomically publishes an immutable release and supports audited rollback. New assessments use the active release; earlier reports are not rewritten. Minimum coverage and context applicability are validated. Shared website-scanner rules are not editable through this questionnaire editor.
+
+## Research and requested help
+
+Benchmark research uses only current, separate opt-in consent, the latest eligible report per workspace, an approved active release, sufficient coverage and recent original assessment dates. Research rows exclude contact details, URLs, location and raw answers. A per-workspace pseudonym supports withdrawal and prevents counting repeat reports as additional workspaces. Counts describe unverified workspaces, not verified independent firms. Statistics are suppressed below 30 qualifying workspaces; public peer estimates and rankings remain unavailable until further validation. No ML adjustment automatically changes production grading.
+
+A separate requested-help form records the user's topic and explicit contact request. Protected administrators can review its status and export a minimal handoff. Withdrawal is supported. A help request does not create marketing consent, contact anyone automatically, or create a HubSpot contact or deal.
+
+## Optional AI explanations
+
+`AI_REVIEW_ENABLED=true` and a server-only `OPENAI_API_KEY` are both required. Without them, AI stays unavailable; there is no substitute account, provider or invented review. An authenticated owner must explicitly request a review of a saved website report and agree to sending its bounded public-page excerpts. Private operating answers, raw HTML, capabilities and contact details are excluded. Reviews provide at most three source-grounded explanations; returned quotations and source IDs must match supplied evidence. Unsupported or invalid responses abstain. AI does not change grades or claim legal quality or compliance.
+
+The configured model, prompt/schema versions and evidence hash are recorded. Calls have a 25-second timeout, no provider retries, a 1,200-token output cap, caching and atomic quotas of 3/account/day, 100/day and 500/month. Provider `store` and SDK telemetry are disabled. These invocation limits bound volume, not the full provider bill. Live provider verification is required before describing AI as operational.
+
+## Still outside this preview
+
+Public named leaderboards/profiles, ML-derived production scoring, automated marketing, CRM synchronization, teammate invitations, document uploads, custom domains and continuous monitoring remain outside this release. A recognition preference alone publishes nothing.
+
+See [Preview scope](docs/PREVIEW_SCOPE.md) for evidence language and review boundaries. Deployment and test receipts are maintained separately from this public repository.

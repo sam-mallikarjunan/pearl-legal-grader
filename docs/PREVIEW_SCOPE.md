@@ -17,7 +17,7 @@ This version combines a browser-local operating assessment with an optional live
 
 Context covers the owner's goal, practice area, jurisdiction, stage, fee model and capacity. It selects relevant questions and recommendations; it does not earn points. Questions ask about a current process. Answer labels distinguish an absent process, an informal practice, a consistent process, a reviewed process, unknown and not applicable.
 
-Unknown answers, omitted answers and failed measurements do not establish a gap. Not applicable is an explicit owner assertion or a defined context rule. No-site and contingency routes exclude inapplicable questions without a penalty. Questionnaire progress, answers and local rubric edits remain device-local.
+Unknown answers, omitted answers and failed measurements do not establish a gap. Not applicable is an explicit owner assertion or a defined context rule. No-site and contingency routes exclude inapplicable questions without a penalty. Guest questionnaire progress and answers remain device-local. Account uploads are explicit and selective.
 
 ## Public website scan
 
@@ -58,19 +58,27 @@ Unknown, unavailable, blocked and inapplicable checks do not receive failing poi
 
 Avoid “Your firm is compliant,” “Best lawyer,” “AI verified,” invented savings and unsupported peer comparisons. Neither a partial operating assessment nor a website score is a whole-practice certification.
 
-## Actions, history and local scoring controls
+## Actions, history and shared scoring controls
 
 Actions explain the finding, why it matters, what to do and effort. Operating action completion reads **Completed by you**, not **Verified improvement**. Empty history invites a baseline rather than fabricating a chart. Reassessment preserves original rubric versions and distinguishes newly supplied evidence from business improvement.
 
 Saved questionnaire history and report copies stay in this browser. Users can save another dated website snapshot; earlier reports are not rewritten. Server records and local copies have separate retention behavior.
 
-The **Scoring studio** is labeled as local demonstration controls with no account or access protection. Draft edits, validation, publication and versions are explicit. It edits questionnaire rules in this browser, not the deployed website rubric or other users' results. Invalid weights, empty rules and insufficient coverage must not produce NaN or misleading perfect scores. Protected shared administration is deferred.
+The protected administration page edits shared questionnaire wording, weights and supported applicability rules. Every publication has a reason, immutable release and audit record. Administrators preview six fictional contexts and can roll back through an atomic active-release pointer. Earlier assessments keep their original version. Local draft changes cannot become canonical account grades.
+
+Optional accounts use emailed one-time codes and server-managed private sessions. Only a selected report is uploaded; importing a report on another device is explicit. Private saved assessments are immutable; action status, target date and self-reported outcomes are separate. Revision checks detect concurrent edits. Cloud exports and individual report/account deletion are supported. Account deletion requires a recent sign-in and explicit confirmation.
+
+Requested report emails contain a scoped summary and a private workspace link. Provider acceptance is distinct from confirmed delivery. No marketing is sent. Requested Pearl contact requires a separate explicit choice and can be withdrawn; no automatic CRM writing or outbound contact occurs.
+
+Research consent, recognition interest and marketing preference are independent and default off. Eligible research requires current consent, one recent sufficiently complete report per workspace and a matching approved release. Raw answers, contact information, location and website URLs are excluded from research rows. Aggregate statistics are suppressed below 30 qualifying unverified workspaces, and public peer rankings remain unavailable. We do not infer representative benchmarks or verified firms from workspace counts.
+
+Optional AI explanations require configuration and an explicit owner request. Only bounded public website excerpts are submitted; explanations must cite matching evidence and do not change scores. Unknown, unsupported and refused analysis remains unavailable. Live provider operation requires a separate successful provider test.
 
 ## Access, limits and retention
 
 The scan backend uses Supabase and durable Vercel jobs. It accepts public standard-port HTTP/HTTPS URLs, rejects credentials/query parameters/private or reserved addresses and sensitive account/payment paths, pins DNS during native fetches, revalidates every redirect and respects robots policies. Public page failures stay unmeasured.
 
-An initiating device receives a random private capability token. Server polling requires it in an authorization header; only token hashes are stored on the server. Tokens live separately from reports and never appear in normal or recovery exports. There is no public result directory, user account or cross-device recovery flow.
+An initiating device receives a random private capability token. Server polling requires it in an authorization header; only token hashes are stored on the server. Tokens live separately from reports and never appear in normal or recovery exports. There is no public result directory. Saving public evidence to a private account requires possession of its original private access grant; the grant is not retained in exports.
 
 The pilot limits submissions to **3 per rolling hour and 10 per rolling 24 hours per hashed client identifier**, including cache hits. New jobs are capped at **30 per UTC day and 300 per UTC calendar month**. Active origin jobs are shared, usable results can be cached for 24 hours under matching versions, and explicit fresh rescans have a 15-minute origin cooldown. Failed jobs count toward the new-job allowance. Atomic reservations enforce these limits under concurrency.
 
@@ -78,7 +86,7 @@ Public website evidence, job records, access grants and hashed request-limit rec
 
 Clear removes browser-local answers, progress, reports, rules and scan tokens. It does not immediately delete server evidence or cancel an existing background job. Explain server expiry separately rather than implying a local clear is an immediate remote erasure request.
 
-No credentials, client identities, privileged matter details, payment information or individual compensation belong in this preview. Questionnaire answers are not sent to the scan backend, an AI service, email provider or CRM.
+No credentials, client identities, privileged matter details, payment information or individual compensation belong in this preview. Questionnaire answers are not sent to the scanner or AI provider. Selected reports may be saved privately with explicit user action. Requested email contains a summary rather than private answers. CRM synchronization is not implemented.
 
 ## Fictional example
 
@@ -88,7 +96,7 @@ Every example selection is fictional. It is not an industry benchmark, a verifie
 
 ## Deferred capabilities
 
-Email/results delivery, authentication and magic links, synchronized questionnaire accounts, protected shared administration, AI/ML scoring, continuous monitoring, document uploads, teammate invitations, public leaderboards/profiles and CRM integration remain deferred. Preferences must not claim to send, authenticate, synchronize or publish. No OpenAI key is required for this release.
+Public profiles and named rankings, ML-adjusted production grades, continuous monitoring, uploads, teammate invitations, automated marketing and CRM synchronization remain deferred. Preferences alone never send a message, create a CRM record or publish a profile. AI stays off until a key is securely configured and the provider is tested.
 
 ## Review checklist
 
@@ -103,6 +111,12 @@ Email/results delivery, authentication and magic links, synchronized questionnai
 - Anonymous database access fails; valid capabilities work; invalid/expired capabilities fail.
 - Concurrent quota reservations cannot exceed caps; stale/failed workflows recover without claiming completion.
 - Local clear and export exclude tokens and accurately describe remote retention.
-- Saved results survive reload and are not rewritten by local rule publication or new scans.
+- Saved results survive reload and retain original rules after shared publication, rollback or new scans.
 - Mobile and keyboard users can reach questions, reports, actions and data controls.
 - Hosted functionality is claimed only after browser → API → job → database → report verification.
+
+- Account and admin routes enforce identity, owner scope and same-origin mutation checks.
+- Canonical cloud reports are recomputed from approved rules and reject forged scores or unproved website evidence.
+- Consent choices remain separate; current withdrawal affects research eligibility.
+- Outbox retries are idempotent, webhook signatures are checked and accepted email is not mislabeled as delivered.
+- Hosted email and cross-device account claims require actual provider and fresh-browser verification.

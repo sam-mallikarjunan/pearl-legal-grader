@@ -29,7 +29,37 @@ export interface WebsiteScanSession {
   result?: WebsiteScanResult;
   error?: string;
 }
-export type ActionState = "todo" | "done" | "deferred";
+export const ACTION_STATES = [
+  "todo",
+  "in_progress",
+  "done",
+  "deferred",
+  "not_relevant",
+] as const;
+export type ActionState = (typeof ACTION_STATES)[number];
+export const ACTION_OUTCOMES = [
+  "improved",
+  "no_change",
+  "worse",
+  "unsure",
+] as const;
+export const ACTION_RELEVANCE_REASONS = [
+  "already_done",
+  "does_not_fit",
+  "incorrect_finding",
+  "too_much_effort",
+  "other",
+] as const;
+/** Private owner observations. These never alter an issued rubric score. */
+export interface ActionProgress {
+  updatedAt: string;
+  targetDate?: string;
+  relevanceReason?: (typeof ACTION_RELEVANCE_REASONS)[number];
+  outcome?: {
+    status: (typeof ACTION_OUTCOMES)[number];
+    recordedAt: string;
+  };
+}
 export interface SavedAssessment {
   id: string;
   practiceId: string;
@@ -52,6 +82,8 @@ export interface PreviewStore {
   releaseHistory: ReleaseSnapshot[];
   assessments: SavedAssessment[];
   actionStates: Record<string, ActionState>;
+  /** Optional to preserve existing device history without a schema reset. */
+  actionProgress?: Record<string, ActionProgress>;
   preferences: PreviewPreferences;
   websiteSessions?: WebsiteScanSession[];
 }
@@ -89,6 +121,61 @@ const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every(isString);
 const isOneOf = (value: unknown, values: readonly string[]) =>
   typeof value === "string" && values.includes(value);
+const isTimestamp = (value: unknown) =>
+  typeof value === "string" &&
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
+  Number.isFinite(Date.parse(value)) &&
+  new Date(value).toISOString() === value;
+
+export function isCalendarDate(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(`${value}T00:00:00.000Z`)) &&
+    new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
+  );
+}
+
+export function isActionProgress(value: unknown): value is ActionProgress {
+  if (!isRecord(value)) return false;
+  if (
+    Object.keys(value).some(
+      (key) =>
+        !["updatedAt", "targetDate", "relevanceReason", "outcome"].includes(
+          key,
+        ),
+    ) ||
+    !isTimestamp(value.updatedAt) ||
+    (value.targetDate !== undefined && !isCalendarDate(value.targetDate)) ||
+    (value.relevanceReason !== undefined &&
+      !isOneOf(value.relevanceReason, ACTION_RELEVANCE_REASONS))
+  )
+    return false;
+  if (value.outcome === undefined) return true;
+  return (
+    isRecord(value.outcome) &&
+    Object.keys(value.outcome).every((key) =>
+      ["status", "recordedAt"].includes(key),
+    ) &&
+    isOneOf(value.outcome.status, ACTION_OUTCOMES) &&
+    isTimestamp(value.outcome.recordedAt)
+  );
+}
+
+/** Drop progress for reports/actions removed by bounded history retention. */
+export function retainActionProgress(
+  progress: Record<string, ActionProgress> | undefined,
+  assessments: SavedAssessment[],
+): Record<string, ActionProgress> {
+  const allowed = new Set(
+    assessments.flatMap((entry) =>
+      entry.assessment.actions.map((action) => `${entry.id}:${action.id}`),
+    ),
+  );
+  return Object.fromEntries(
+    Object.entries(progress ?? {}).filter(([key]) => allowed.has(key)),
+  );
+}
 const ANSWER_VALUES = [
   "not_yet",
   "ad_hoc",
@@ -374,10 +461,26 @@ export function parseStore(raw: string | null): PreviewStore | null {
     if (
       !isRecord(v.actionStates) ||
       Object.values(v.actionStates).some(
-        (state) => !isOneOf(state, ["todo", "done", "deferred"]),
+        (state) => !isOneOf(state, ACTION_STATES),
       )
     )
       return null;
+    if (v.actionProgress !== undefined) {
+      if (
+        !isRecord(v.actionProgress) ||
+        Object.keys(v.actionProgress).length > 1200 ||
+        Object.values(v.actionProgress).some(
+          (entry) => !isActionProgress(entry),
+        )
+      )
+        return null;
+      const retained = retainActionProgress(
+        v.actionProgress as Record<string, ActionProgress>,
+        savedAssessments,
+      );
+      if (Object.keys(retained).length !== Object.keys(v.actionProgress).length)
+        return null;
+    }
     if (
       !isRecord(v.preferences) ||
       ["reminders", "marketing", "benchmarking", "leaderboard"].some(

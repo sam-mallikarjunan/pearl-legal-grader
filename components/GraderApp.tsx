@@ -32,21 +32,28 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import AdminPanel from "./AdminPanel";
+import AccountPanel from "./AccountPanel";
+import ActionProgressControls from "./ActionProgressControls";
+import PeerContextPanel from "./PeerContextPanel";
 import WebsiteScanPanel, { useWebsiteScans } from "./WebsiteScanPanel";
 import type { WebsiteScanResult } from "../lib/website/types";
 import { DEFAULT_RELEASE } from "../lib/catalog";
+import { canonicalJson } from "../lib/configuration";
 import { assessPractice, getQuestionApplicability } from "../lib/scoring";
 import { SAMPLE_ANSWERS, SAMPLE_CONTEXT, SAMPLE_CONTROLS } from "../lib/demo";
 import {
   emptyStore,
   normalizeWebsite,
   parseStore,
+  retainActionProgress,
   STORAGE_KEY,
   type ActionState,
+  type ActionProgress,
   type PreviewPreferences,
   type PreviewStore,
   type SavedAssessment,
 } from "../lib/storage";
+import type { CloudActionProgress } from "../lib/account/types";
 import {
   DOMAIN_IDS,
   type Answers,
@@ -242,11 +249,13 @@ function ActionCard({
   index,
   state,
   setState,
+  progress,
 }: {
   action: PrioritizedAction;
   index: number;
   state: ActionState;
-  setState: (s: ActionState) => void;
+  setState: (s: ActionState, progress?: ActionProgress) => void;
+  progress?: ActionProgress;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -301,25 +310,12 @@ function ActionCard({
             </p>
           </div>
         )}
-        <div className="action-controls">
-          <button
-            className={`btn btn-small ${state === "done" ? "btn-done" : "btn-secondary"}`}
-            onClick={() => setState(state === "done" ? "todo" : "done")}
-          >
-            <Check size={15} />
-            {state === "done" ? "Completed by you" : "Mark complete"}
-          </button>
-          <button
-            className="quiet-button"
-            onClick={() => setState(state === "deferred" ? "todo" : "deferred")}
-          >
-            {state === "deferred" ? "Bring back" : "Do later"}
-          </button>
-          {state === "done" && (
-            <span className="fine-print">Outcome not yet measured</span>
-          )}
-          {state === "deferred" && <span className="tag">Deferred</span>}
-        </div>
+        <ActionProgressControls
+          state={state}
+          progress={progress}
+          onChange={setState}
+          outcomePrompt={action.verification}
+        />
       </div>
     </article>
   );
@@ -327,10 +323,18 @@ function ActionCard({
 
 export default function GraderApp({
   websiteScansEnabled = false,
+  publishedRelease = DEFAULT_RELEASE,
+  configurationAvailable = true,
 }: {
   websiteScansEnabled?: boolean;
+  publishedRelease?: ReleaseSnapshot;
+  configurationAvailable?: boolean;
 }) {
-  const [store, setStore] = useState<PreviewStore>(emptyStore);
+  const [store, setStore] = useState<PreviewStore>(() => ({
+    ...emptyStore(),
+    activeRelease: structuredClone(publishedRelease),
+    releaseHistory: [structuredClone(publishedRelease)],
+  }));
   const [loaded, setLoaded] = useState(false);
   const [storageWarning, setStorageWarning] = useState("");
   const [unreadableData, setUnreadableData] = useState<string | null>(null);
@@ -345,7 +349,7 @@ export default function GraderApp({
   const [wizardStep, setWizardStep] = useState(0);
   const [module, setModule] = useState<DomainId>("operations");
   const [assessmentRelease, setAssessmentRelease] =
-    useState<ReleaseSnapshot>(DEFAULT_RELEASE);
+    useState<ReleaseSnapshot>(publishedRelease);
   const [isSample, setIsSample] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [practiceId, setPracticeId] = useState("");
@@ -368,7 +372,17 @@ export default function GraderApp({
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = parseStore(raw);
-        if (saved) setStore(saved);
+        if (saved)
+          setStore({
+            ...saved,
+            activeRelease: structuredClone(publishedRelease),
+            releaseHistory: [
+              structuredClone(publishedRelease),
+              ...saved.releaseHistory.filter(
+                (item) => item.id !== publishedRelease.id,
+              ),
+            ].slice(0, 30),
+          });
         else {
           setUnreadableData(raw);
           setStorageWarning(
@@ -382,11 +396,20 @@ export default function GraderApp({
       );
     }
     setLoaded(true);
-  }, []);
+  }, [publishedRelease]);
   useEffect(() => {
     if (loaded && !unreadableData) {
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+        localStorage.setItem(
+          STORAGE_KEY,
+          JSON.stringify({
+            ...store,
+            actionProgress: retainActionProgress(
+              store.actionProgress,
+              store.assessments,
+            ),
+          }),
+        );
       } catch {
         setStorageWarning(
           "Changes could not be saved in this browser. Download your data before leaving.",
@@ -505,7 +528,7 @@ export default function GraderApp({
     setBaselineId(null);
     setWizardStep(0);
     setModule("operations");
-    setAssessmentRelease(structuredClone(store.activeRelease));
+    setAssessmentRelease(structuredClone(publishedRelease));
     navigate("assessment");
     if (normalized && websiteScansEnabled)
       void websiteScans.begin(normalized, newPracticeId);
@@ -546,10 +569,14 @@ export default function GraderApp({
             )
           : undefined,
     };
-    setStore((s) => ({
-      ...s,
-      assessments: [entry, ...s.assessments].slice(0, 30),
-    }));
+    setStore((s) => {
+      const assessments = [entry, ...s.assessments].slice(0, 30);
+      return {
+        ...s,
+        assessments,
+        actionProgress: retainActionProgress(s.actionProgress, assessments),
+      };
+    });
     setSelectedId(entry.id);
     navigate("report");
   }
@@ -559,7 +586,7 @@ export default function GraderApp({
       SAMPLE_ANSWERS,
       SAMPLE_CONTROLS,
       true,
-      store.activeRelease,
+      publishedRelease,
       null,
     );
   }
@@ -576,6 +603,20 @@ export default function GraderApp({
     setStore((previous) => ({
       ...previous,
       assessments: [entry, ...previous.assessments].slice(0, 30),
+      actionProgress: retainActionProgress(
+        {
+          ...previous.actionProgress,
+          ...Object.fromEntries(
+            Object.entries(previous.actionProgress ?? {})
+              .filter(([key]) => key.startsWith(`${current.id}:`))
+              .map(([key, value]) => [
+                key.replace(`${current.id}:`, `${newId}:`),
+                value,
+              ]),
+          ),
+        },
+        [entry, ...previous.assessments].slice(0, 30),
+      ),
       actionStates: {
         ...previous.actionStates,
         ...Object.fromEntries(
@@ -611,6 +652,20 @@ export default function GraderApp({
       setStore((previous) => ({
         ...previous,
         assessments: [entry, ...previous.assessments].slice(0, 30),
+        actionProgress: retainActionProgress(
+          {
+            ...previous.actionProgress,
+            ...Object.fromEntries(
+              Object.entries(previous.actionProgress ?? {})
+                .filter(([key]) => key.startsWith(`${current.id}:`))
+                .map(([key, value]) => [
+                  key.replace(`${current.id}:`, `${entry.id}:`),
+                  value,
+                ]),
+            ),
+          },
+          [entry, ...previous.assessments].slice(0, 30),
+        ),
         actionStates: {
           ...previous.actionStates,
           ...Object.fromEntries(
@@ -646,7 +701,7 @@ export default function GraderApp({
     setControls({});
     setIsSample(false);
     setBaselineId(null);
-    setAssessmentRelease(structuredClone(store.activeRelease));
+    setAssessmentRelease(structuredClone(publishedRelease));
     setWizardStep(0);
     setModule("operations");
     navigate("assessment");
@@ -678,9 +733,25 @@ export default function GraderApp({
     );
   }
   function exportData() {
-    const blob = new Blob([unreadableData ?? JSON.stringify(store, null, 2)], {
-      type: "application/json",
-    });
+    const blob = new Blob(
+      [
+        unreadableData ??
+          JSON.stringify(
+            {
+              ...store,
+              actionProgress: retainActionProgress(
+                store.actionProgress,
+                store.assessments,
+              ),
+            },
+            null,
+            2,
+          ),
+      ],
+      {
+        type: "application/json",
+      },
+    );
     const url = URL.createObjectURL(blob),
       link = document.createElement("a");
     link.href = url;
@@ -693,7 +764,11 @@ export default function GraderApp({
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
-    setStore(emptyStore());
+    setStore({
+      ...emptyStore(),
+      activeRelease: structuredClone(publishedRelease),
+      releaseHistory: [structuredClone(publishedRelease)],
+    });
     setSelectedId(null);
     setContext(EMPTY_CONTEXT);
     setAnswers({});
@@ -705,7 +780,7 @@ export default function GraderApp({
     setBaselineId(null);
     setWizardStep(0);
     setModule("operations");
-    setAssessmentRelease(structuredClone(DEFAULT_RELEASE));
+    setAssessmentRelease(structuredClone(publishedRelease));
     setUnreadableData(null);
     setModal(null);
     setStorageWarning("");
@@ -713,7 +788,11 @@ export default function GraderApp({
     navigate("home");
     notify("Assessment history and preferences cleared from this preview.");
   }
-  function setAction(actionId: string, state: ActionState) {
+  function setAction(
+    actionId: string,
+    state: ActionState,
+    progress?: ActionProgress,
+  ) {
     if (current)
       setStore((s) => ({
         ...s,
@@ -721,7 +800,46 @@ export default function GraderApp({
           ...s.actionStates,
           [`${current.id}:${actionId}`]: state,
         },
+        actionProgress: {
+          ...retainActionProgress(s.actionProgress, s.assessments),
+          [`${current.id}:${actionId}`]: progress ?? {
+            updatedAt: new Date().toISOString(),
+          },
+        },
       }));
+  }
+  function importAccountReport(
+    entry: SavedAssessment,
+    progress: CloudActionProgress[] = [],
+  ) {
+    const existing = store.assessments.find((item) => item.id === entry.id);
+    if (existing && canonicalJson(existing) !== canonicalJson(entry))
+      throw new Error(
+        "A different local report has this identifier. Export it before importing another copy.",
+      );
+    setStore((previous) => {
+      const assessments = existing
+        ? previous.assessments
+        : [structuredClone(entry), ...previous.assessments].slice(0, 30);
+      const actionStates = { ...previous.actionStates };
+      const actionProgress = retainActionProgress(
+        previous.actionProgress,
+        assessments,
+      );
+      for (const action of progress) {
+        const key = `${entry.id}:${action.actionId}`;
+        if (actionStates[key] === undefined) actionStates[key] = action.state;
+        if (!actionProgress[key] && action.details)
+          actionProgress[key] = structuredClone(action.details);
+      }
+      return { ...previous, assessments, actionStates, actionProgress };
+    });
+    setSelectedId(entry.id);
+    setModal(null);
+    navigate("report");
+    notify(
+      "Your account report is open on this device. Existing reports and local progress were preserved.",
+    );
   }
   function updatePreference(key: keyof PreviewPreferences, value: boolean) {
     setStore((s) => ({
@@ -784,7 +902,7 @@ export default function GraderApp({
               )}
               <p id="url-help" className="fine-print">
                 {websiteScansEnabled
-                  ? "We’ll inspect a few public pages while you answer. Public scan access expires after 30 days; expired records are removed during scheduled cleanup. Your business answers stay in this browser."
+                  ? "We’ll inspect a few public pages while you answer. Public scan access expires after 30 days. Your business answers stay on this device until you choose to save a report to a private account."
                   : "Live website checks are not available on this deployment yet. Your URL provides context for the practice assessment."}
               </p>
             </form>
@@ -1008,7 +1126,8 @@ export default function GraderApp({
           <div className="aside-note">
             <LockKeyhole size={18} />
             <p>
-              Your answers stay in this browser. Don’t enter client information,
+              Guest answers stay on this device until you choose to save a
+              report to your private account. Don’t enter client information,
               account credentials or private documents.
             </p>
           </div>
@@ -1573,7 +1692,10 @@ export default function GraderApp({
               action={action}
               index={i}
               state={store.actionStates[`${current.id}:${action.id}`] ?? "todo"}
-              setState={(state) => setAction(action.id, state)}
+              progress={store.actionProgress?.[`${current.id}:${action.id}`]}
+              setState={(state, progress) =>
+                setAction(action.id, state, progress)
+              }
             />
           ))}
           {report.actions.length === 0 && (
@@ -1966,12 +2088,14 @@ export default function GraderApp({
                   action={a}
                   index={i}
                   state={store.actionStates[`${current.id}:${a.id}`] ?? "todo"}
-                  setState={(s) => setAction(a.id, s)}
+                  progress={store.actionProgress?.[`${current.id}:${a.id}`]}
+                  setState={(s, progress) => setAction(a.id, s, progress)}
                 />
               ))}
             </div>
           </section>
           <aside>
+            <PeerContextPanel assessment={current} />
             <div className="card assessment-history">
               <span className="eyebrow">YOUR ASSESSMENT HISTORY</span>
               <h3>A record of where you started.</h3>
@@ -2060,7 +2184,7 @@ export default function GraderApp({
             {
               icon: LockKeyhole,
               title: "You choose what to share",
-              text: "Questionnaire answers and action progress stay on this device. A website check sends the public URL to our scanner and mobile audit service. Public scan access expires after 30 days; expired records are removed during scheduled cleanup. Saved reports stay in this browser until you clear them. No emails, private business answers or leaderboard entries are sent.",
+              text: "Guest answers and progress stay on this device. Saving a selected report to a verified private account uploads that report and its progress so you can return from another device. Sign-in codes and report emails are sent only when requested. Public scan access expires after 30 days. Private research, commercial contact and any future public sharing have separate choices; no public leaderboard is active.",
             },
           ].map((x) => {
             const Icon = x.icon;
@@ -2150,13 +2274,10 @@ export default function GraderApp({
             Find my starting point
             <ArrowRight size={16} />
           </button>
-          <button
-            className="btn btn-secondary"
-            onClick={() => navigate("admin")}
-          >
-            Explore the scoring editor
+          <a className="btn btn-secondary" href="/admin">
+            Manage published methodology
             <Settings2 size={16} />
-          </button>
+          </a>
         </div>
       </section>
     );
@@ -2203,10 +2324,11 @@ export default function GraderApp({
         <p className="fine-print">
           Website checks send a public URL for inspection. Public scan access
           expires after 30 days, and expired server records are removed during
-          scheduled cleanup. Business questionnaire answers stay in this
-          browser. Clearing this device removes local history and scan access,
-          but does not cancel queued scans or delete public findings already
-          stored on the server.
+          scheduled cleanup. Business questionnaire answers stay on this device
+          unless you explicitly save a selected report to your private account.
+          Clearing this device removes local history and scan access. Cloud
+          account copies have separate export and deletion controls, and queued
+          public scans keep their own expiry.
         </p>
         <div className="preference-list">
           {items.map((item) => (
@@ -2262,7 +2384,7 @@ export default function GraderApp({
         <span className="preview-pill">PREVIEW</span>
         <span>
           {websiteScansEnabled
-            ? "Live website checks + owner-reported answers. Accounts and email come later."
+            ? "Live website checks + owner-reported answers. Optional private accounts."
             : "Practice assessment preview. Website checks are unavailable on this deployment."}
         </span>
         <button onClick={() => setModal("preferences")}>
@@ -2310,19 +2432,22 @@ export default function GraderApp({
             Methodology
           </button>
         </nav>
-        <button
-          className={`admin-nav ${view === "admin" ? "active" : ""}`}
-          onClick={() => navigate("admin")}
-        >
-          <Settings2 size={16} />
-          <span>Scoring editor</span>
-        </button>
+        <a className="admin-nav" href="/account">
+          <LockKeyhole size={16} />
+          <span>Private account</span>
+        </a>
       </header>
       {storageWarning && (
         <div className="storage-warning" role="alert">
           {storageWarning}
           <button onClick={exportData}>Download data</button>
           <button onClick={() => setModal("clear")}>Clear saved data</button>
+        </div>
+      )}
+      {!configurationAvailable && (
+        <div className="storage-warning" role="status">
+          The latest shared methodology could not be loaded. New assessments use
+          the built-in provisional baseline; your saved reports stay unchanged.
         </div>
       )}
       {websiteScans.accessWarning && (
@@ -2349,8 +2474,8 @@ export default function GraderApp({
                 <span className="eyebrow">LOCAL CONFIGURATION PLAYGROUND</span>
                 <h1>Make the rubric your own.</h1>
                 <p>
-                  Test wording, weights and release behavior before a production
-                  admin exists.
+                  This local sandbox affects this browser only. The protected
+                  admin console manages published methodology.
                 </p>
               </div>
             </div>
@@ -2380,7 +2505,8 @@ export default function GraderApp({
           <button onClick={() => setModal("preferences")}>
             Data & preferences
           </button>
-          <span>Interactive preview · {store.activeRelease.id}</span>
+          <a href="/admin">Administration</a>
+          <span>Interactive preview · {publishedRelease.id}</span>
         </div>
       </footer>
       {toast && (
@@ -2500,20 +2626,13 @@ export default function GraderApp({
       )}
       {modal === "email" && (
         <Dialog
-          title="Your report is here, without an account."
+          title="Save your progress privately"
           close={() => setModal(null)}
         >
-          <div className="dialog-feature-icon">
-            <LockKeyhole size={27} />
-          </div>
-          <p>
-            Email delivery and magic-link accounts will connect in a later
-            phase. No address is collected or message sent in this preview.
-          </p>
-          <p className="muted">
-            For now, return in the same browser, download your preview data, or
-            print a report.
-          </p>
+          <AccountPanel
+            selectedReport={current ?? undefined}
+            onImport={importAccountReport}
+          />
           <div className="button-row">
             <button
               className="btn btn-primary"

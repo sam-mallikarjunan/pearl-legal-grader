@@ -8,6 +8,9 @@ import {
   normalizeWebsite,
   parseStore,
   parseScanAccess,
+  isActionProgress,
+  isCalendarDate,
+  retainActionProgress,
   type PreviewStore,
 } from "./storage";
 import type { WebsiteScanResult } from "./website/types";
@@ -437,4 +440,79 @@ test("private scan access has a separate bounded validator and never enters repo
   const store = emptyStore();
   assert.equal(JSON.stringify(store).includes(token), false);
   assert.equal(JSON.stringify(store).includes("accessToken"), false);
+});
+
+test("action plans retain optional progress and outcomes without rewriting issued scores", () => {
+  const store = savedStore();
+  const issued = JSON.stringify(store.assessments[0]);
+  const actionId = store.assessments[0].assessment.actions[0].id;
+  const key = `sample-assessment:${actionId}`;
+  store.actionStates[key] = "in_progress";
+  store.actionProgress = {
+    [key]: {
+      updatedAt: "2026-10-16T12:30:00.000Z",
+      targetDate: "2026-10-23",
+    },
+  };
+  assert.deepEqual(parseStore(JSON.stringify(store)), store);
+  store.actionStates[key] = "done";
+  store.actionProgress[key].outcome = {
+    status: "improved",
+    recordedAt: "2026-10-24T12:30:00.000Z",
+  };
+  assert.deepEqual(parseStore(JSON.stringify(store)), store);
+  assert.equal(JSON.stringify(store.assessments[0]), issued);
+  store.actionStates[key] = "not_relevant";
+  store.actionProgress[key].relevanceReason = "does_not_fit";
+  assert.deepEqual(parseStore(JSON.stringify(store)), store);
+  delete store.actionProgress;
+  assert.ok(
+    parseStore(JSON.stringify(store)),
+    "old history needs no new field",
+  );
+});
+
+test("action details reject malformed dates, unknown metadata and unissued actions", () => {
+  assert.equal(isCalendarDate("2026-02-29"), false);
+  assert.equal(isCalendarDate("2028-02-29"), true);
+  assert.equal(isCalendarDate("2026-10-23T00:00:00Z"), false);
+  const base = { updatedAt: "2026-10-16T12:30:00.000Z" };
+  for (const invalid of [
+    null,
+    [],
+    {},
+    { updatedAt: "yesterday" },
+    { updatedAt: "2026-02-31T12:30:00.000Z" },
+    { ...base, targetDate: "2026-02-31" },
+    { ...base, relevanceReason: "publish_my_firm" },
+    { ...base, outcome: { status: "verified", recordedAt: base.updatedAt } },
+    { ...base, outcome: { status: "improved", recordedAt: "not-a-date" } },
+    { ...base, accessToken: "secret-must-not-be-exported" },
+    {
+      ...base,
+      outcome: {
+        status: "improved",
+        recordedAt: base.updatedAt,
+        token: "secret",
+      },
+    },
+  ])
+    assert.equal(isActionProgress(invalid), false, JSON.stringify(invalid));
+  const store = savedStore();
+  store.actionProgress = { "sample-assessment:unissued-action": base };
+  assert.equal(parseStore(JSON.stringify(store)), null);
+  store.actionProgress = { "another-assessment:cash-review": base };
+  assert.equal(parseStore(JSON.stringify(store)), null);
+});
+
+test("bounded report retention removes progress for reports or actions no longer retained", () => {
+  const store = savedStore();
+  const key = `${store.assessments[0].id}:${store.assessments[0].assessment.actions[0].id}`;
+  const detail = { updatedAt: "2026-10-16T12:30:00.000Z" };
+  const progress = { [key]: detail, "expired-report:cash-review": detail };
+  assert.deepEqual(retainActionProgress(progress, store.assessments), {
+    [key]: detail,
+  });
+  assert.deepEqual(retainActionProgress(progress, []), {});
+  assert.deepEqual(retainActionProgress(undefined, store.assessments), {});
 });
