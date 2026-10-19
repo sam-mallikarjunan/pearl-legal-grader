@@ -37,7 +37,7 @@ const store = (
   });
 test("help storage derives the user and purpose consent from trusted server state", async () => {
   const api = store(async (name, args) => {
-    assert.equal(name, "grader_lead_request_help");
+    assert.equal(name, "grader_lead_request_routed_help");
     assert.equal(args.p_user_id, user);
     assert.equal(args.p_consent_text, HELP_CONSENT_TEXT);
     assert.equal(args.p_consent_version, HELP_CONSENT_VERSION);
@@ -48,6 +48,7 @@ test("help storage derives the user and purpose consent from trusted server stat
     requestId,
     topic: "intake",
     consent: true,
+    consentVersion: HELP_CONSENT_VERSION,
   });
   assert.equal(result.created, true);
   assert.equal(result.request.status, "open");
@@ -60,6 +61,39 @@ test("missing explicit help permission never reaches database", async () => {
     api.requestHelp(user, { requestId, topic: "intake" }),
     (error: unknown) =>
       error instanceof ResearchServiceError && error.status === 400,
+  );
+});
+test("old or absent browser consent version cannot authorize expanded queue sharing", async () => {
+  const api = store(async () => {
+    throw new Error("must not call");
+  });
+  for (const consentVersion of [undefined, "requested-pearl-help-v1"]) {
+    await assert.rejects(
+      api.requestHelp(user, {
+        requestId,
+        topic: "intake",
+        consent: true,
+        consentVersion,
+      }),
+      (error: unknown) =>
+        error instanceof ResearchServiceError && error.status === 400,
+    );
+  }
+});
+test("historical v1 requests remain readable and withdrawable without upgraded permission", async () => {
+  const legacy = { ...request, consentVersion: "requested-pearl-help-v1" };
+  const api = store(async (name) =>
+    name === "grader_lead_list_own"
+      ? [legacy]
+      : { ...legacy, status: "withdrawn", contactConsent: false, revision: 1 },
+  );
+  assert.equal(
+    (await api.ownRequests(user))[0].consentVersion,
+    "requested-pearl-help-v1",
+  );
+  assert.equal(
+    (await api.withdrawRequest(user, requestId)).contactConsent,
+    false,
   );
 });
 test("owner withdrawal and status changes use trusted identity and revision guards", async () => {

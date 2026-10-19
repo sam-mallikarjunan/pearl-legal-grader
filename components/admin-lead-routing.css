@@ -1,0 +1,55 @@
+.requested-contact-admin {
+  display: grid;
+  gap: 18px;
+  margin-block: 30px;
+  border-top: 1px solid var(--line);
+  padding-top: 24px;
+  min-width: 0;
+}
+.requested-contact-admin header {
+  display: grid;
+  gap: 10px;
+}
+.requested-contact-admin header .btn {
+  justify-self: start;
+}
+.requested-contact-list {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+}
+.requested-contact-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.requested-contact-card p {
+  overflow-wrap: anywhere;
+}
+.requested-contact-card .btn {
+  justify-self: start;
+  max-width: 100%;
+  white-space: normal;
+}
+.requested-contact-card select,
+.requested-contact-card input {
+  min-width: 0;
+  max-width: 100%;
+}
+.requested-contact-edit {
+  display: grid;
+  gap: 12px;
+}
+.requested-contact-detail {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  background: var(--soft);
+  border-radius: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

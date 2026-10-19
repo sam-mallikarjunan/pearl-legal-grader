@@ -1,4 +1,8 @@
 import { accountRecord, accountUuid } from "./account/validation";
+import {
+  LEAD_ROUTING_CONSENT_TEXT,
+  LEAD_ROUTING_CONSENT_VERSION,
+} from "./lead-routing";
 export const HELP_TOPICS = [
   "intake",
   "cash",
@@ -16,9 +20,12 @@ export const HELP_TOPIC_LABELS: Record<HelpTopic, string> = {
   resilience: "Coverage and practice resilience",
   not_sure: "Choosing the right next step",
 };
-export const HELP_CONSENT_VERSION = "requested-pearl-help-v1";
-export const HELP_CONSENT_TEXT =
-  "I am asking Pearl to contact me at my verified account email about the selected business need. This request is separate from optional product marketing, does not affect my grade, and can be withdrawn before follow-up.";
+export const HELP_CONSENT_VERSION = LEAD_ROUTING_CONSENT_VERSION;
+export const HELP_CONSENT_VERSIONS = [
+  "requested-pearl-help-v1",
+  HELP_CONSENT_VERSION,
+] as const;
+export const HELP_CONSENT_TEXT = LEAD_ROUTING_CONSENT_TEXT;
 export const HELP_STATUSES = [
   "open",
   "in_review",
@@ -45,11 +52,19 @@ export function parseHelpInput(
   if (
     !accountRecord(value) ||
     Object.keys(value).some(
-      (key) => !["requestId", "topic", "reportId", "consent"].includes(key),
+      (key) =>
+        ![
+          "requestId",
+          "topic",
+          "reportId",
+          "consent",
+          "consentVersion",
+        ].includes(key),
     ) ||
     !accountUuid(value.requestId) ||
     !HELP_TOPICS.includes(value.topic as HelpTopic) ||
     value.consent !== true ||
+    value.consentVersion !== HELP_CONSENT_VERSION ||
     (value.reportId !== undefined &&
       value.reportId !== null &&
       !accountUuid(value.reportId))

@@ -11,7 +11,11 @@ import {
   researchSummary,
   type ResearchCandidate,
 } from "./research";
-import { HELP_CONSENT_TEXT, parseHelpInput } from "./help-requests";
+import {
+  HELP_CONSENT_TEXT,
+  HELP_CONSENT_VERSION,
+  parseHelpInput,
+} from "./help-requests";
 import type { SavedAssessment } from "./storage";
 const now = new Date("2026-10-16T16:00:00.000Z");
 const workspace = "84ec0e52-f2ee-42a2-8432-a3520a9e7f77";
@@ -230,7 +234,12 @@ test("requested help requires its own explicit purpose permission and typed inpu
     null,
   );
   assert.deepEqual(
-    parseHelpInput({ requestId, topic: "intake", consent: true }),
+    parseHelpInput({
+      requestId,
+      topic: "intake",
+      consent: true,
+      consentVersion: HELP_CONSENT_VERSION,
+    }),
     { requestId, topic: "intake", reportId: null },
   );
   assert.ok(HELP_CONSENT_TEXT.includes("separate"));

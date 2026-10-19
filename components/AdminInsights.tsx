@@ -8,6 +8,8 @@ import {
 import type { researchSummary } from "../lib/research";
 import type { AdminHelpRequest } from "../lib/server/research-store";
 import { AdminNurture } from "./NurtureEnrollment";
+import AdminCalibration from "./AdminCalibration";
+import AdminLeadRouting from "./AdminLeadRouting";
 import "./published-admin.css";
 
 interface Insights {
@@ -84,7 +86,7 @@ export default function AdminInsights() {
       if (!response.ok)
         throw new Error(body.error || "The request could not be updated.");
       await load();
-      setMessage("Request status saved. No message or CRM update was sent.");
+      setMessage("Request status saved.");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -150,6 +152,8 @@ export default function AdminInsights() {
             </div>
           </section>
           <AdminNurture />
+          <AdminCalibration />
+          <AdminLeadRouting />
           <section className="pa-card pa-summary">
             <div>
               <strong>Private workspaces</strong>

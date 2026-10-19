@@ -12,6 +12,7 @@ import {
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
+  HELP_CONSENT_VERSIONS,
   HELP_STATUSES,
   HELP_TOPICS,
   parseHelpInput,
@@ -72,7 +73,9 @@ function helpRequest(value: unknown): HelpRequest {
     !HELP_STATUSES.includes(value.status as HelpStatus) ||
     !stamp(value.createdAt) ||
     !stamp(value.updatedAt) ||
-    value.consentVersion !== HELP_CONSENT_VERSION ||
+    !HELP_CONSENT_VERSIONS.includes(
+      value.consentVersion as (typeof HELP_CONSENT_VERSIONS)[number],
+    ) ||
     typeof value.consentText !== "string" ||
     value.consentText.length > 1000 ||
     typeof value.contactConsent !== "boolean" ||
@@ -88,7 +91,7 @@ function helpRequest(value: unknown): HelpRequest {
     status: value.status as HelpStatus,
     createdAt: value.createdAt,
     updatedAt: value.updatedAt,
-    consentVersion: value.consentVersion,
+    consentVersion: value.consentVersion as string,
     consentText: value.consentText,
     contactConsent: value.contactConsent,
     reportId: value.reportId,
@@ -223,7 +226,7 @@ export function createResearchStore(dependencies: ResearchDependencies) {
           "invalid_help_request",
           "Choose a business need and explicitly agree to requested follow-up.",
         );
-      const data = await rpc("grader_lead_request_help", {
+      const data = await rpc("grader_lead_request_routed_help", {
         p_user_id: userId,
         p_request_id: input.requestId,
         p_topic: input.topic,

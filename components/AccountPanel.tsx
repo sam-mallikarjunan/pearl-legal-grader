@@ -37,8 +37,10 @@ import ActionProgressControls from "./ActionProgressControls";
 import WebsiteAIReview from "./WebsiteAIReview";
 import LeaderboardEnrollment from "./LeaderboardEnrollment";
 import NurtureEnrollment from "./NurtureEnrollment";
+import OutcomeTracker from "./OutcomeTracker";
 import {
   HELP_CONSENT_TEXT,
+  HELP_CONSENT_VERSION,
   HELP_STATUSES,
   HELP_TOPICS,
   HELP_TOPIC_LABELS,
@@ -820,6 +822,7 @@ export default function AccountPanel({
           requestId,
           topic: helpTopic,
           consent: true,
+          consentVersion: HELP_CONSENT_VERSION,
           ...(helpReportId ? { reportId: helpReportId } : {}),
         }),
       });
@@ -845,7 +848,7 @@ export default function AccountPanel({
       );
       await loadHelpRequests();
       setMessage(
-        "Your contact request was withdrawn. Your optional marketing choices are unchanged.",
+        "Your contact request was withdrawn from Pearl’s follow-up queue. Your optional marketing choices are unchanged.",
       );
     });
   }
@@ -1267,14 +1270,14 @@ export default function AccountPanel({
                   </select>
                 </label>
                 <label className="field-label" htmlFor={`${id}-help-report`}>
-                  Related saved report (optional)
+                  Share a report summary (optional)
                   <select
                     id={`${id}-help-report`}
                     value={helpReportId}
                     disabled={!!busy}
                     onChange={(event) => setHelpReportId(event.target.value)}
                   >
-                    <option value="">No report reference</option>
+                    <option value="">Share no report summary</option>
                     {reports.map((saved) => (
                       <option key={saved.id} value={saved.id}>
                         {saved.snapshot.label} ·{" "}
@@ -1429,6 +1432,10 @@ export default function AccountPanel({
             key={`leaderboard-${user.id}`}
             reports={reports}
           />
+          <OutcomeTracker
+            key={`outcomes-${user.id}`}
+            baselineReports={reports}
+          />
           <NurtureEnrollment
             key={`learning-${user.id}-${preferences?.revision ?? 0}`}
             onPreferencesChanged={() => loadPrivate()}
@@ -1452,11 +1459,12 @@ export default function AccountPanel({
             <p className="fine-print">
               This deletes your email sign-in account and its private reports,
               action progress, explanations, preferences, leaderboard entry,
-              email-series enrollment and contact requests. Download an account
-              export first if you want a copy. Device copies remain separate.
-              Shared public website checks expire after 30 days; provider logs
-              and backups follow their own retention. Hashed abuse-prevention
-              counters expire after their separate 48-hour window.
+              email-series enrollment, outcome records and contact requests.
+              Download an account export first if you want a copy. Device copies
+              remain separate. Shared public website checks expire after 30
+              days; provider logs and backups follow their own retention. Hashed
+              abuse-prevention counters expire after their separate 48-hour
+              window.
             </p>
             <p className="fine-print">
               A recent sign-in is required. If your sign-in is older than 15

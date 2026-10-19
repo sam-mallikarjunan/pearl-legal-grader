@@ -2444,6 +2444,7 @@ export default function GraderApp({
         <a href="/benchmarks">Industry benchmarks</a>
         <a href="/leaderboard">Opt-in leaderboard</a>
         <a href="/account#practice-learning">Weekly practice lessons</a>
+        <a href="/account#business-outcomes">Track business outcomes</a>
       </nav>
       {storageWarning && (
         <div className="storage-warning" role="alert">
