@@ -1,0 +1,241 @@
+.practice-benchmarks {
+  margin: 36px 0;
+  padding: 28px;
+  border: 1px solid #d5dfd9;
+  border-radius: 20px;
+  background: #f7faf8;
+  color: #183b30;
+  overflow-wrap: anywhere;
+}
+.practice-benchmark-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+}
+.practice-benchmark-heading > div {
+  max-width: 720px;
+}
+.practice-benchmark-heading h2 {
+  margin: 6px 0 12px;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  line-height: 1.2;
+}
+.practice-benchmark-heading p {
+  line-height: 1.65;
+}
+.practice-benchmark-heading button {
+  flex-shrink: 0;
+}
+.practice-benchmark-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.7rem;
+  font-weight: 750;
+  color: #4f6b5e;
+  margin: 0 0 8px;
+}
+.practice-benchmark-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.practice-benchmark-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 0.88rem;
+  font-weight: 650;
+  min-width: 0;
+}
+.practice-benchmark-controls select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #bbcfc2;
+  border-radius: 8px;
+  padding: 11px;
+  color: #183b30;
+  font: inherit;
+  font-weight: 400;
+}
+.practice-benchmark-controls select:focus-visible,
+.practice-benchmarks button:focus-visible,
+.practice-benchmarks summary:focus-visible {
+  outline: 3px solid #78a98b;
+  outline-offset: 3px;
+}
+.practice-benchmark-status {
+  padding: 18px 20px;
+  border-radius: 12px;
+  background: #eaf1eb;
+  line-height: 1.65;
+}
+.practice-benchmark-status h3 {
+  font-size: 1.08rem;
+  margin: 0 0 8px;
+}
+.practice-benchmark-status p {
+  margin: 8px 0;
+}
+.practice-benchmark-cohort {
+  margin-top: 24px;
+  background: #fff;
+  border: 1px solid #d5dfd9;
+  border-radius: 14px;
+  padding: 24px;
+  min-width: 0;
+}
+.practice-benchmark-cohort h4 {
+  font-size: 1.25rem;
+  margin: 8px 0 20px;
+}
+.practice-benchmark-scope {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+}
+.practice-benchmark-scope > div,
+.practice-benchmark-metric dl > div {
+  min-width: 0;
+}
+.practice-benchmark-scope dt,
+.practice-benchmark-metric dt {
+  font-size: 0.75rem;
+  color: #547164;
+  font-weight: 650;
+  margin-bottom: 5px;
+}
+.practice-benchmark-scope dd,
+.practice-benchmark-metric dd {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+.practice-benchmark-score {
+  padding: 14px 0;
+  border-top: 1px solid #e2e9e4;
+  border-bottom: 1px solid #e2e9e4;
+  font-size: 0.88rem;
+  line-height: 1.65;
+}
+.practice-benchmark-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 265px), 1fr));
+  gap: 22px;
+  margin-top: 24px;
+}
+.practice-benchmark-metric {
+  min-width: 0;
+}
+.practice-benchmark-metric h5 {
+  font-size: 0.96rem;
+  margin: 0 0 10px;
+}
+.practice-benchmark-metric p {
+  line-height: 1.65;
+  font-size: 0.83rem;
+}
+.practice-benchmark-metric .practice-benchmark-value {
+  font-size: 1.6rem;
+  line-height: 1.3;
+  font-weight: 650;
+  margin: 0 0 12px;
+  letter-spacing: -0.02em;
+}
+.practice-benchmark-metric dl {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0;
+}
+.practice-benchmark-note {
+  font-size: 0.8rem !important;
+  line-height: 1.65;
+  color: #526b5d;
+}
+.practice-benchmark-next {
+  padding: 18px 0;
+}
+.practice-benchmark-next h3 {
+  font-size: 1.05rem;
+}
+.practice-benchmark-next ol {
+  padding-left: 20px;
+  font-size: 0.87rem;
+  line-height: 1.8;
+}
+.practice-benchmark-next li {
+  padding-bottom: 7px;
+}
+.practice-benchmark-method {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid #d5dfd9;
+  font-size: 0.85rem;
+  line-height: 1.7;
+}
+.practice-benchmarks summary {
+  cursor: pointer;
+  font-weight: 650;
+}
+.practice-benchmark-method p {
+  margin: 12px 0;
+}
+.practice-benchmark-table-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin-top: 10px;
+}
+.practice-benchmark-table-wrap table {
+  font-size: 0.75rem;
+  width: 100%;
+  border-collapse: collapse;
+}
+.practice-benchmark-table-wrap th,
+.practice-benchmark-table-wrap td {
+  padding: 8px 5px;
+  text-align: left;
+  border-bottom: 1px solid #d5dfd9;
+  vertical-align: top;
+}
+.practice-benchmark-table-wrap caption {
+  text-align: left;
+  margin-bottom: 8px;
+  line-height: 1.6;
+  color: #526b5d;
+}
+.practice-benchmark-metric details {
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+@media (max-width: 650px) {
+  .practice-benchmarks {
+    padding: 20px 16px;
+    margin: 26px 0;
+  }
+  .practice-benchmark-heading {
+    display: block;
+  }
+  .practice-benchmark-heading button {
+    margin-top: 12px;
+    width: 100%;
+    white-space: normal;
+  }
+  .practice-benchmark-cohort {
+    padding: 18px 14px;
+  }
+  .practice-benchmark-metrics {
+    gap: 26px;
+  }
+  .practice-benchmark-metric + .practice-benchmark-metric {
+    padding-top: 20px;
+    border-top: 1px solid #e2e9e4;
+  }
+  .practice-benchmark-next a {
+    white-space: normal;
+    text-align: center;
+    width: 100%;
+  }
+}

@@ -14,6 +14,8 @@ import { leadRoutingStore } from "../../../../lib/server/lead-routing-store";
 import { exportOwnOutcomePlans } from "../../../../lib/server/outcome-plan-store";
 import { exportOwnOutcomeReminders } from "../../../../lib/server/outcome-reminder-store";
 import { exportOwnOutcomeImports } from "../../../../lib/server/outcome-import-store";
+import { exportOwnDataIntegrations } from "../../../../lib/server/data-integration-store";
+import { exportOwnActionObservations } from "../../../../lib/server/action-observation-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -30,6 +32,8 @@ export async function GET(request: Request) {
       outcomePlans,
       outcomeReminders,
       outcomeImports,
+      dataIntegrations,
+      actionObservations,
     ] = await Promise.all([
       exportAccount(user.id),
       researchStore().ownRequests(user.id),
@@ -42,6 +46,8 @@ export async function GET(request: Request) {
       exportOwnOutcomePlans(user.id),
       exportOwnOutcomeReminders(user.id),
       exportOwnOutcomeImports(user.id),
+      exportOwnDataIntegrations(user.id),
+      exportOwnActionObservations(user.id),
     ]);
     return Response.json(
       {
@@ -56,6 +62,8 @@ export async function GET(request: Request) {
         outcomePlans,
         outcomeReminders,
         outcomeImports,
+        dataIntegrations,
+        actionObservations,
       },
       {
         headers: {

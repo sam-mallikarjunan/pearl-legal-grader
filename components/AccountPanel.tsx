@@ -43,6 +43,8 @@ import OutcomeReminders from "./OutcomeReminders";
 import OutcomeImportWizard from "./OutcomeImportWizard";
 import ProgressInsights from "./ProgressInsights";
 import PersonalizedActions from "./PersonalizedActions";
+import DataIntegrations from "./DataIntegrations";
+import ActionObservations from "./ActionObservations";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -1442,6 +1444,7 @@ export default function AccountPanel({
             baselineReports={reports}
           />
           <OutcomeImportWizard key={`outcome-imports-${user.id}`} />
+          <DataIntegrations key={`data-integrations-${user.id}`} />
           <ProgressInsights
             key={`progress-insights-${user.id}`}
             reports={reports}
@@ -1454,6 +1457,10 @@ export default function AccountPanel({
           <OutcomePlans
             key={`outcome-plans-${user.id}`}
             baselineReports={reports}
+          />
+          <ActionObservations
+            key={`action-observations-${user.id}`}
+            reports={reports}
           />
           <OutcomeReminders key={`outcome-reminders-${user.id}`} />
           <NurtureEnrollment

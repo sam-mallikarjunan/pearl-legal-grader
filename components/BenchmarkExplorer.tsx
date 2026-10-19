@@ -20,6 +20,7 @@ import {
   searchIndustryBenchmarks,
 } from "../lib/benchmarks";
 import type { PublicBenchmarkSummary } from "../lib/benchmarks-public";
+import PracticeBenchmarks from "./PracticeBenchmarks";
 
 const domainLabels = {
   presence: "Public presence",
@@ -502,6 +503,7 @@ export default function BenchmarkExplorer() {
             </div>
           </div>
         </section>
+        <PracticeBenchmarks />
         <footer className="benchmark-footer">
           <p>
             A benchmark should help you make a decision. Your goals, fee model,

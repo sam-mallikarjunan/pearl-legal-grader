@@ -136,7 +136,11 @@ export default function OutcomePlans({
     }
   }
   return (
-    <section className="outcome-plans" aria-labelledby={`${id}-title`}>
+    <section
+      id="outcome-plans"
+      className="outcome-plans"
+      aria-labelledby={`${id}-title`}
+    >
       <p className="eyebrow">PLAN ONE USEFUL MONTH</p>
       <h2 id={`${id}-title`}>Choose a baseline before the month begins</h2>
       <p>
