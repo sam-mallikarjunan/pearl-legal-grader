@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, LockKeyhole, Users } from "lucide-react";
 import type { SavedAssessment } from "../lib/storage";
 import { benchmarkAvailability, privateSharePreview } from "../lib/peer";
@@ -14,6 +14,24 @@ export default function PeerContextPanel({
 }: PeerContextPanelProps) {
   const [showPreview, setShowPreview] = useState(false);
   const availability = benchmarkAvailability();
+  const [published, setPublished] = useState(false);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/benchmarks", {
+      cache: "no-store",
+      signal: controller.signal,
+    })
+      .then(async (response) => (response.ok ? response.json() : null))
+      .then((value) => {
+        if (!controller.signal.aborted)
+          setPublished(
+            value?.status === "descriptive" &&
+              value?.publicationEnabled === true,
+          );
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, []);
   const preview = assessment ? privateSharePreview(assessment) : null;
   return (
     <section
@@ -22,8 +40,16 @@ export default function PeerContextPanel({
     >
       <Users size={26} aria-hidden="true" />
       <p className="eyebrow">YOUR OWN PROGRESS COMES FIRST</p>
-      <h3>No peer rank before the evidence.</h3>
-      <p>{availability.explanation}</p>
+      <h3>Use comparisons with context.</h3>
+      <p>
+        {published
+          ? "Descriptive comparisons from eligible consenting workspaces are available. They describe participants under this rubric, not the legal profession."
+          : "Published industry observations can help you choose what to measure. Community comparisons appear only when enough eligible workspaces contribute; no peer percentile is inferred from your score."}
+      </p>
+      <div className="dialog-data-actions">
+        <a href="/benchmarks">Explore industry benchmarks</a>
+        <a href="/leaderboard">See opt-in recognition</a>
+      </div>
       <details>
         <summary className="text-link">What a useful comparison needs</summary>
         <ul className="fine-print">
@@ -32,7 +58,7 @@ export default function PeerContextPanel({
           ))}
         </ul>
         <p className="fine-print">
-          A future group will be self-selected. Its results will describe those
+          A community group is self-selected. Its results describe those
           participants, not the whole legal profession. Your score never depends
           on contribution, public sharing or a product purchase.
         </p>

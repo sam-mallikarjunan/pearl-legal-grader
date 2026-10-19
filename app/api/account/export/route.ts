@@ -7,19 +7,36 @@ import { exportAccount } from "../../../../lib/server/account-store";
 import { researchStore } from "../../../../lib/server/research-store";
 import { exportReportEmails } from "../../../../lib/server/report-email";
 import { exportWebsiteAIReviews } from "../../../../lib/server/ai-review";
+import { leaderboardStore } from "../../../../lib/server/leaderboard-store";
+import { exportOwnNurture } from "../../../../lib/server/nurture-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
     const user = await requireAccount(request);
-    const [account, helpRequests, reportEmails, websiteExplanations] =
-      await Promise.all([
-        exportAccount(user.id),
-        researchStore().ownRequests(user.id),
-        exportReportEmails(user.id),
-        exportWebsiteAIReviews(user.id),
-      ]);
+    const [
+      account,
+      helpRequests,
+      reportEmails,
+      websiteExplanations,
+      leaderboard,
+      nurture,
+    ] = await Promise.all([
+      exportAccount(user.id),
+      researchStore().ownRequests(user.id),
+      exportReportEmails(user.id),
+      exportWebsiteAIReviews(user.id),
+      leaderboardStore().exportOwn(user.id),
+      exportOwnNurture(user.id),
+    ]);
     return Response.json(
-      { ...account, helpRequests, reportEmails, websiteExplanations },
+      {
+        ...account,
+        helpRequests,
+        reportEmails,
+        websiteExplanations,
+        leaderboard,
+        nurture,
+      },
       {
         headers: {
           ...ACCOUNT_HEADERS,

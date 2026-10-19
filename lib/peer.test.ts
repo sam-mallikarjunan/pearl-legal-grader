@@ -40,10 +40,32 @@ test("peer availability exposes no invented cohort, rank, percentile or raw part
     "firms",
   ])
     assert.equal(field in expected, false, field);
-  const response = await GET();
+  const response = await GET(
+    new Request("https://grader.example/api/benchmarks"),
+  );
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("Cache-Control"), "no-store");
-  assert.deepEqual(await response.json(), expected);
+  const body = await response.json();
+  assert.equal(body.status, "insufficient_data");
+  assert.equal(body.publicationEnabled, false);
+  assert.equal(body.minimumCohort, 30);
+  assert.equal(body.cohortSizeBand, null);
+  assert.deepEqual(body.domains, []);
+  assert.equal(typeof body.catalogVersion, "string");
+  assert.equal(typeof body.sourcesReviewedAt, "string");
+  for (const forbidden of [
+    "rows",
+    "workspaceId",
+    "workspacePseudonym",
+    "participants",
+    "percentile",
+    "rank",
+  ])
+    assert.equal(forbidden in body, false, forbidden);
+  const filtered = await GET(
+    new Request("https://grader.example/api/benchmarks?stage=solo"),
+  );
+  assert.equal(filtered.status, 400);
 });
 
 test("private recognition remains a scoped draft and excludes identity and sensitive answers", () => {

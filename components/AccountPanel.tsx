@@ -35,6 +35,8 @@ import {
 } from "../lib/account/types";
 import ActionProgressControls from "./ActionProgressControls";
 import WebsiteAIReview from "./WebsiteAIReview";
+import LeaderboardEnrollment from "./LeaderboardEnrollment";
+import NurtureEnrollment from "./NurtureEnrollment";
 import {
   HELP_CONSENT_TEXT,
   HELP_STATUSES,
@@ -88,7 +90,7 @@ const freshPreferences = (): AccountPreferenceValues => ({
 });
 const preferenceLabels: Record<keyof AccountPreferenceValues, string> = {
   reminders: "Action reminders",
-  marketing: "Pearl education and product updates",
+  marketing: "Marketing email",
   benchmarking: "Private aggregate research",
   leaderboard: "Interest in future recognition",
 };
@@ -1234,7 +1236,11 @@ export default function AccountPanel({
               ))
             )}
           </section>
-          <section className="guide-note" aria-label="Request help from Pearl">
+          <section
+            id="request-help"
+            className="guide-note"
+            aria-label="Request help from Pearl"
+          >
             <h3>Want help with the business side?</h3>
             <p className="fine-print">
               Choose a need and ask Pearl to contact you. This preview records
@@ -1359,7 +1365,9 @@ export default function AccountPanel({
                 These are separate choices, not requirements for using the
                 grader. Device-only interest settings are never copied into
                 account consent. Reminders and public recognition are not
-                activated by saving a choice alone.
+                activated by saving a choice alone. Use the separate enrollment
+                controls below to publish an anonymous entry or join the weekly
+                email series.
               </p>
               <div className="preference-list">
                 {(
@@ -1370,7 +1378,11 @@ export default function AccountPanel({
                   <label className="preference" key={key}>
                     <span>
                       <strong>{preferenceLabels[key]}</strong>
-                      <small>{ACCOUNT_CONSENT_TEXT[key]}</small>
+                      <small>
+                        {key === "marketing" && preferenceDraft.marketing
+                          ? "Email is enabled for the permissions you explicitly granted. Joining the course permits only its four lessons. Turn this off to stop all grader marketing."
+                          : ACCOUNT_CONSENT_TEXT[key]}
+                      </small>
                     </span>
                     <input
                       type="checkbox"
@@ -1398,6 +1410,12 @@ export default function AccountPanel({
                 statistics may not be reversible; your private answers and
                 practice identity are not published by these choices.
               </p>
+              <p className="fine-print">
+                Requesting the four-part course permits only those lessons, not
+                general product news or offers. Stopping marketing here also
+                stops the course. Its separate enrollment never starts again
+                just because an email preference is turned on.
+              </p>
               <button
                 className="btn btn-secondary"
                 disabled={!!busy || !prefsChanged}
@@ -1407,6 +1425,14 @@ export default function AccountPanel({
               </button>
             </section>
           )}
+          <LeaderboardEnrollment
+            key={`leaderboard-${user.id}`}
+            reports={reports}
+          />
+          <NurtureEnrollment
+            key={`learning-${user.id}-${preferences?.revision ?? 0}`}
+            onPreferencesChanged={() => loadPrivate()}
+          />
           <div className="dialog-data-actions">
             <button
               className="btn btn-secondary"
@@ -1425,12 +1451,12 @@ export default function AccountPanel({
             <summary className="text-link danger">Delete my account</summary>
             <p className="fine-print">
               This deletes your email sign-in account and its private reports,
-              action progress, explanations, preferences and contact requests.
-              Download an account export first if you want a copy. Device copies
-              remain separate. Shared public website checks expire after 30
-              days; provider logs and backups follow their own retention. Hashed
-              abuse-prevention counters expire after their separate 48-hour
-              window.
+              action progress, explanations, preferences, leaderboard entry,
+              email-series enrollment and contact requests. Download an account
+              export first if you want a copy. Device copies remain separate.
+              Shared public website checks expire after 30 days; provider logs
+              and backups follow their own retention. Hashed abuse-prevention
+              counters expire after their separate 48-hour window.
             </p>
             <p className="fine-print">
               A recent sign-in is required. If your sign-in is older than 15

@@ -314,6 +314,43 @@ svg {
   justify-content: space-between;
   gap: 25px;
 }
+.growth-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  align-items: center;
+  padding-block: 10px 18px;
+  font-size: 12px;
+}
+.growth-nav a {
+  text-underline-offset: 4px;
+}
+.growth-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-block: 18px;
+}
+.growth-consent input {
+  flex: 0 0 auto;
+  width: auto;
+  margin-top: 5px;
+}
+.account-subsection {
+  display: grid;
+  gap: 14px;
+  margin-block: 24px;
+  padding-block: 24px;
+  border-top: 1px solid var(--line);
+}
+.growth-page .card {
+  padding: clamp(20px, 4vw, 32px);
+  margin-block: 20px;
+}
+.growth-page > .card {
+  display: grid;
+  gap: 16px;
+}
 .brand {
   background: none;
   border: 0;
@@ -2975,6 +3012,7 @@ svg {
   }
   .site-footer > div:last-child {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: space-between;
     gap: 10px;
   }
@@ -2983,6 +3021,9 @@ svg {
     font-size: 7px;
   }
   .site-footer button {
+    font-size: 8px;
+  }
+  .site-footer a {
     font-size: 8px;
   }
   .footer-brand strong {

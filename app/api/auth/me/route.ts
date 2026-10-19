@@ -5,6 +5,7 @@ import {
   readAccount,
 } from "../../../../lib/server/account-auth";
 import { reportEmailEnabled } from "../../../../lib/server/report-email";
+import { nurtureConfiguration } from "../../../../lib/server/nurture-store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
@@ -15,6 +16,7 @@ export async function GET(request: Request) {
         configured: accountAuthConfigured(),
         emailConfigured: process.env.AUTH_EMAIL_ENABLED === "true",
         reportEmailConfigured: reportEmailEnabled(),
+        nurtureConfigured: nurtureConfiguration().enabled,
         user: user
           ? { id: user.id, email: user.email, admin: isAdminEmail(user.email) }
           : null,

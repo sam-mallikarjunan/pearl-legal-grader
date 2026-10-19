@@ -2184,7 +2184,7 @@ export default function GraderApp({
             {
               icon: LockKeyhole,
               title: "You choose what to share",
-              text: "Guest answers and progress stay on this device. Saving a selected report to a verified private account uploads that report and its progress so you can return from another device. Sign-in codes and report emails are sent only when requested. Public scan access expires after 30 days. Private research, commercial contact and any future public sharing have separate choices; no public leaderboard is active.",
+              text: "Guest answers and progress stay on this device. Saving a selected report to a verified private account uploads that report and its progress so you can return from another device. Sign-in codes and report summaries are requested separately. The weekly education series and anonymous leaderboard each require their own explicit enrollment. Public scan access expires after 30 days. Private research, commercial contact and public sharing have separate choices.",
             },
           ].map((x) => {
             const Icon = x.icon;
@@ -2437,6 +2437,14 @@ export default function GraderApp({
           <span>Private account</span>
         </a>
       </header>
+      <nav
+        className="growth-nav page-width"
+        aria-label="Learning and community"
+      >
+        <a href="/benchmarks">Industry benchmarks</a>
+        <a href="/leaderboard">Opt-in leaderboard</a>
+        <a href="/account#practice-learning">Weekly practice lessons</a>
+      </nav>
       {storageWarning && (
         <div className="storage-warning" role="alert">
           {storageWarning}
@@ -2506,6 +2514,8 @@ export default function GraderApp({
             Data & preferences
           </button>
           <a href="/admin">Administration</a>
+          <a href="/benchmarks">Benchmarks</a>
+          <a href="/leaderboard">Leaderboard</a>
           <span>Interactive preview · {publishedRelease.id}</span>
         </div>
       </footer>

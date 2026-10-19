@@ -68,9 +68,9 @@ The protected administration page edits shared questionnaire wording, weights an
 
 Optional accounts use emailed one-time codes and server-managed private sessions. Only a selected report is uploaded; importing a report on another device is explicit. Private saved assessments are immutable; action status, target date and self-reported outcomes are separate. Revision checks detect concurrent edits. Cloud exports and individual report/account deletion are supported. Account deletion requires a recent sign-in and explicit confirmation.
 
-Requested report emails contain a scoped summary and a private workspace link. Provider acceptance is distinct from confirmed delivery. No marketing is sent. Requested Pearl contact requires a separate explicit choice and can be withdrawn; no automatic CRM writing or outbound contact occurs.
+Requested report emails contain a scoped summary and a private workspace link. Provider acceptance is distinct from confirmed delivery. Educational marketing is sent only after separate four-part course enrollment; no existing account is enrolled automatically. Requested Pearl contact requires a separate explicit choice and can be withdrawn; no automatic CRM writing or outbound contact occurs.
 
-Research consent, recognition interest and marketing preference are independent and default off. Eligible research requires current consent, one recent sufficiently complete report per workspace and a matching approved release. Raw answers, contact information, location and website URLs are excluded from research rows. Aggregate statistics are suppressed below 30 qualifying unverified workspaces, and public peer rankings remain unavailable. We do not infer representative benchmarks or verified firms from workspace counts.
+Research consent, recognition interest and marketing preference are independent and default off. Eligible research requires current consent, one recent sufficiently complete report per workspace and a matching approved release. Raw answers, contact information, location and website URLs are excluded from research rows. Public aggregate medians require 30 qualifying known scores per metric and use rounded values with banded counts. Anonymous leaderboard publication requires a separate explicit choice and ten eligible participants in the same broad stage/fee/rubric cohort. We do not infer representative benchmarks or verified firms from workspace counts.
 
 Optional AI explanations require configuration and an explicit owner request. Only bounded public website excerpts are submitted; explanations must cite matching evidence and do not change scores. Unknown, unsupported and refused analysis remains unavailable. Live provider operation requires a separate successful provider test.
 
@@ -96,7 +96,7 @@ Every example selection is fictional. It is not an industry benchmark, a verifie
 
 ## Deferred capabilities
 
-Public profiles and named rankings, ML-adjusted production grades, continuous monitoring, uploads, teammate invitations, automated marketing and CRM synchronization remain deferred. Preferences alone never send a message, create a CRM record or publish a profile. AI stays off until a key is securely configured and the provider is tested.
+Named public profiles and legal-quality rankings, ML-adjusted production grades, continuous monitoring, uploads, teammate invitations, general marketing campaigns and CRM synchronization remain deferred. The anonymous opt-in leaderboard and separately enrolled four-part educational series are implemented with the disclosed limits. Preferences alone never send a message, create a CRM record or publish a profile. AI stays off until a key is securely configured and the provider is tested.
 
 ## Review checklist
 

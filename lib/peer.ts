@@ -7,16 +7,16 @@ export function benchmarkAvailability() {
   return {
     status: "insufficient_data" as const,
     methodologyVersion: PEER_METHODOLOGY_VERSION,
-    title: "Peer comparisons are still being built",
+    title: "Community comparisons need enough evidence",
     explanation:
       "There is no published, reviewed comparison group yet. Your assessment is useful on its own; no peer rank or percentile is assigned.",
     eligibility: [
       "Explicit, separate permission to contribute private assessment data",
-      "Distinct verified practices with compatible practice context",
+      "Distinct consenting workspaces with compatible practice context; accounts do not verify law firms",
       "The same scoring version, scope and evidence definitions",
       "Adequate evidence coverage and recent observations",
       "Enough participants plus privacy and concentration review",
-      "Human review and a dated, frozen publication",
+      "A disclosed method, source dates and clear limits on interpretation",
     ],
     boundaries: [
       "Owner reports and observed website findings stay separate",

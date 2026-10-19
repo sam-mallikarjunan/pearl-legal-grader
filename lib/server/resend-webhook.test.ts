@@ -173,3 +173,45 @@ test("tagged but malformed event recipients and timestamps are rejected before s
     );
   assert.equal(calls, 0);
 });
+
+test("signed nurture events use the dedicated outbox and suppression namespace without storing recipients", async () => {
+  const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+  const data = {
+    email_id: "5297ad82-c04a-40c2-92d9-9e4bbf4306e9",
+    to: ["private@example.invalid"],
+    tags: { pearl_grader_nurture: "9780410c-1dc0-4b82-a272-b4e3add6a081" },
+  };
+  await ingestResendWebhook(
+    { type: "email.complained", created_at: "2026-10-19T12:00:00Z", data },
+    "msg_nurture_fixture",
+    "synthetic-webhook-hash-secret-long-enough",
+    async (name, args = {}) => {
+      calls.push({ name, args });
+      return true;
+    },
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "grader_record_nurture_event");
+  assert.equal(calls[0].args.p_event_type, "email.complained");
+  assert.match(String(calls[0].args.p_recipient_hash), /^[a-f0-9]{64}$/);
+  assert.ok(!JSON.stringify(calls).includes("private@example.invalid"));
+  await assert.rejects(
+    ingestResendWebhook(
+      {
+        type: "email.delivered",
+        created_at: "2026-10-19T12:00:00Z",
+        data: {
+          ...data,
+          tags: {
+            ...data.tags,
+            pearl_grader_report: "9780410c-1dc0-4b82-a272-b4e3add6a081",
+          },
+        },
+      },
+      "msg_ambiguous_fixture",
+      "synthetic-webhook-hash-secret-long-enough",
+      async () => true,
+    ),
+    InvalidResendWebhook,
+  );
+});

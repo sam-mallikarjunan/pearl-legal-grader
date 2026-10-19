@@ -7,6 +7,7 @@ import {
 } from "../lib/help-requests";
 import type { researchSummary } from "../lib/research";
 import type { AdminHelpRequest } from "../lib/server/research-store";
+import { AdminNurture } from "./NurtureEnrollment";
 import "./published-admin.css";
 
 interface Insights {
@@ -136,6 +137,19 @@ export default function AdminInsights() {
       )}
       {access === "allowed" && data && (
         <>
+          <section className="pa-card">
+            <h2>Benchmarks and public recognition</h2>
+            <p>
+              Published industry observations keep their own source and cohort.
+              Community aggregates and anonymous entries use separate consent
+              and minimum group sizes. None changes the issued practice grade.
+            </p>
+            <div className="pa-actions">
+              <a href="/benchmarks">View benchmarks</a>
+              <a href="/leaderboard">View the opt-in leaderboard</a>
+            </div>
+          </section>
+          <AdminNurture />
           <section className="pa-card pa-summary">
             <div>
               <strong>Private workspaces</strong>
@@ -151,9 +165,12 @@ export default function AdminInsights() {
               </small>
             </div>
             <div>
-              <strong>Separate marketing permission</strong>
+              <strong>Grader email permission</strong>
               <p>{data.counts.marketingConsent}</p>
-              <small>Permission never adds practice-grade points.</small>
+              <small>
+                Course-only permission is excluded from the general marketing
+                export. Permission never adds practice-grade points.
+              </small>
             </div>
           </section>
           <section className="pa-card">

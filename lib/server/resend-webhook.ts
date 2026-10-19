@@ -96,11 +96,18 @@ export async function ingestResendWebhook(
   if (
     !accountRecord(payload.data) ||
     !accountRecord(payload.data.tags) ||
-    !accountUuid(payload.data.tags.pearl_grader_report)
+    (!accountUuid(payload.data.tags.pearl_grader_report) &&
+      !accountUuid(payload.data.tags.pearl_grader_nurture))
   )
     return;
   const data = payload.data;
   const tags = data.tags as Record<string, unknown>;
+  // Ambiguous application tags are rejected rather than assigning one provider message to two outboxes.
+  if (
+    accountUuid(tags.pearl_grader_report) &&
+    accountUuid(tags.pearl_grader_nurture)
+  )
+    throw new InvalidResendWebhook();
   if (
     !accountUuid(data.email_id) ||
     !Array.isArray(data.to) ||
@@ -116,12 +123,20 @@ export async function ingestResendWebhook(
   const recipientHash = createHmac("sha256", hashSecret)
     .update(`report-email-recipient:${data.to[0].toLowerCase()}`)
     .digest("hex");
-  await rpc("grader_record_report_email_event", {
-    p_event_id: eventId,
-    p_outbox_id: tags.pearl_grader_report,
-    p_provider_id: data.email_id,
-    p_event_type: payload.type,
-    p_occurred_at: payload.created_at,
-    p_recipient_hash: recipientHash,
-  });
+  const nurture = accountUuid(tags.pearl_grader_nurture);
+  await rpc(
+    nurture
+      ? "grader_record_nurture_event"
+      : "grader_record_report_email_event",
+    {
+      p_event_id: eventId,
+      p_outbox_id: nurture
+        ? tags.pearl_grader_nurture
+        : tags.pearl_grader_report,
+      p_provider_id: data.email_id,
+      p_event_type: payload.type,
+      p_occurred_at: payload.created_at,
+      p_recipient_hash: recipientHash,
+    },
+  );
 }
