@@ -3,6 +3,7 @@ import {
   accountUuid,
   parseAccountReport,
 } from "./account/validation";
+import { decodeOutcomePlan, type OutcomePlan } from "./outcome-plans";
 import { assessPractice } from "./scoring";
 import { parseOutcomePeriodInput } from "./outcomes";
 import {
@@ -13,7 +14,8 @@ import {
   type PracticeStage,
 } from "./types";
 
-export const CALIBRATION_VERSION = "preexisting-baseline-owner-outcomes-v1";
+export const CALIBRATION_VERSION =
+  "preregistered-and-retrospective-owner-outcomes-v2";
 export const CALIBRATION_MIN_WORKSPACES = 30;
 export const CALIBRATION_MIN_CELL = 5;
 export const CALIBRATION_MIN_EXPERIMENT = 100;
@@ -49,12 +51,19 @@ export interface CalibrationSource {
   benchmarking: boolean;
   outcomeResearch: boolean;
   periods: unknown[];
-  baselines: { id: string; savedAt: string; report: unknown }[];
+  baselines: {
+    id: string;
+    savedAt: string;
+    report: unknown;
+    contentHash?: string;
+  }[];
+  plans?: unknown[];
 }
 export interface CalibrationPair {
   /** Server-only opaque, purpose-bound HMAC. Never serialize a pair to the API. */
   workspaceKey: string;
   releaseId: string;
+  provenance?: "preregistered" | "retrospective";
   currency: (typeof CALIBRATION_CURRENCIES)[number];
   source: (typeof CALIBRATION_SOURCES)[number];
   stage: PracticeStage;
@@ -144,6 +153,32 @@ export function projectCalibrationSource(
     candidate.baselines.length > 24
   )
     return { eligible: false, reason: "invalid_record" };
+  if (
+    candidate.plans !== undefined &&
+    (!Array.isArray(candidate.plans) || candidate.plans.length > 36)
+  )
+    return { eligible: false, reason: "invalid_record" };
+  const plans: Array<OutcomePlan & { baselineContentHash: string }> = [];
+  try {
+    for (const value of candidate.plans ?? []) {
+      const p = decodeOutcomePlan(value);
+      if (
+        !accountRecord(value) ||
+        typeof value.baselineContentHash !== "string" ||
+        !/^[a-f0-9]{64}$/.test(value.baselineContentHash)
+      )
+        return { eligible: false, reason: "invalid_record" };
+      plans.push({ ...p, baselineContentHash: value.baselineContentHash });
+    }
+  } catch {
+    return { eligible: false, reason: "invalid_record" };
+  }
+  if (
+    new Set(plans.map((p) => p.id)).size !== plans.length ||
+    new Set(plans.filter((p) => p.outcomeId !== null).map((p) => p.outcomeId))
+      .size !== plans.filter((p) => p.outcomeId !== null).length
+  )
+    return { eligible: false, reason: "invalid_record" };
   const periods = candidate.periods.map((p) => period(p, now));
   if (periods.some((p) => p === null))
     return { eligible: false, reason: "invalid_record" };
@@ -166,6 +201,19 @@ export function projectCalibrationSource(
     )
   )
     return { eligible: false, reason: "invalid_record" };
+  // A genuine registration takes priority, independent of the measured result.
+  // Within each provenance choose the earliest eligible period, even if outcomes are unknown.
+  ordered.sort(
+    (a, b) =>
+      Number(
+        plans.some((p) => p.status === "reported" && p.outcomeId === b.id),
+      ) -
+        Number(
+          plans.some((p) => p.status === "reported" && p.outcomeId === a.id),
+        ) ||
+      a.startDate.localeCompare(b.startDate) ||
+      a.id.localeCompare(b.id),
+  );
   let reason: CalibrationReason = "no_closed_period";
   const today = new Date(now).toISOString().slice(0, 10);
   for (const p of ordered) {
@@ -175,6 +223,36 @@ export function projectCalibrationSource(
     const periodDays = (day(p.endDate)! - start) / 86400000 + 1;
     if (periodDays < 28 || periodDays > 31) {
       reason = "incomparable_period";
+      continue;
+    }
+    const plan = plans.find((plan) => plan.outcomeId === p.id);
+    if (
+      plan?.status === "withdrawn" ||
+      (!plan &&
+        plans.some(
+          (previous) =>
+            previous.status === "withdrawn" &&
+            previous.startDate <= p.endDate &&
+            previous.endDate >= p.startDate,
+        ))
+    ) {
+      reason = "invalid_record";
+      continue;
+    }
+    if (
+      plan &&
+      (plan.status !== "reported" ||
+        plan.startDate !== p.startDate ||
+        plan.endDate !== p.endDate ||
+        plan.source !== p.source ||
+        plan.currency !== p.currency ||
+        plan.baselineReportId !== p.baselineReportId ||
+        plan.baselineReleaseId !== release.id ||
+        Date.parse(plan.createdAt) >= start ||
+        !plan.reportedAt ||
+        Date.parse(plan.reportedAt) < day(p.endDate)! + 86400000)
+    ) {
+      reason = "invalid_record";
       continue;
     }
     const baseline = p.baselineReportId
@@ -200,6 +278,15 @@ export function projectCalibrationSource(
         ? Date.parse(baseline.report.createdAt)
         : NaN;
     const savedAt = Date.parse(baseline.savedAt);
+    if (
+      plan &&
+      (baseline.contentHash !== plan.baselineContentHash ||
+        savedAt > Date.parse(plan.createdAt) ||
+        assessedAt > Date.parse(plan.createdAt))
+    ) {
+      reason = "invalid_record";
+      continue;
+    }
     if (!Number.isFinite(assessedAt)) {
       reason = "invalid_record";
       continue;
@@ -235,6 +322,14 @@ export function projectCalibrationSource(
         reason = "insufficient_evidence";
         continue;
       }
+      if (
+        plan &&
+        (plan.baselineStage !== assessment.contextSnapshot.stage ||
+          plan.baselineFeeModel !== assessment.contextSnapshot.feeModel)
+      ) {
+        reason = "invalid_record";
+        continue;
+      }
       const fraction = (num: number | null, den: number | null) =>
         num !== null && den !== null && den > 0 ? num / den : null;
       // This earliest eligible pair is retained even if every metric is unknown. Do not cherry-pick later periods.
@@ -243,6 +338,7 @@ export function projectCalibrationSource(
         pair: {
           workspaceKey: pseudonym(candidate.workspaceId),
           releaseId: release.id,
+          provenance: plan ? "preregistered" : "retrospective",
           currency: p.currency,
           source: p.source,
           stage: assessment.contextSnapshot.stage,
@@ -428,6 +524,8 @@ export function calibrationSummary(
     dataset.pairs.some(
       (p) =>
         p.releaseId !== release.id ||
+        (p.provenance !== undefined &&
+          !["preregistered", "retrospective"].includes(p.provenance)) ||
         !/^[a-f0-9]{64}$/.test(p.workspaceKey) ||
         !Number.isFinite(p.score) ||
         p.score < 0 ||
@@ -462,9 +560,13 @@ export function calibrationSummary(
   const safePairs = incomplete ? [] : dataset.pairs;
   const groups = new Map<string, CalibrationPair[]>();
   for (const pair of safePairs) {
-    const key = [pair.currency, pair.source, pair.stage, pair.feeModel].join(
-      "|",
-    );
+    const key = [
+      pair.provenance ?? "retrospective",
+      pair.currency,
+      pair.source,
+      pair.stage,
+      pair.feeModel,
+    ].join("|");
     groups.set(key, [...(groups.get(key) ?? []), pair]);
   }
   const cohorts = [...groups.entries()]
@@ -473,6 +575,11 @@ export function calibrationSummary(
     .map(([, members]) => {
       const { currency, source, stage, feeModel } = members[0];
       return {
+        provenance: members[0].provenance ?? "retrospective",
+        provenanceLabel:
+          members[0].provenance === "preregistered"
+            ? "Registered before the period began"
+            : "Retrospective link to an earlier baseline",
         currency,
         source,
         stage,
@@ -607,6 +714,26 @@ export function calibrationSummary(
             workspaces: calibrationCountBand(dataset.excluded[reason] ?? 0),
           })),
     cohorts,
+    evidenceTracks: (["preregistered", "retrospective"] as const).map(
+      (provenance) => ({
+        provenance,
+        status: incomplete
+          ? "incomplete"
+          : cohorts.some(
+                (c) =>
+                  c.provenance === provenance &&
+                  c.metrics.some((m) => m.status === "descriptive"),
+              )
+            ? "descriptive"
+            : "forming",
+        eligibleWorkspaces: calibrationCountBand(
+          safePairs.filter(
+            (p) => (p.provenance ?? "retrospective") === provenance,
+          ).length,
+          30,
+        ),
+      }),
+    ),
     candidateWeights: weights ?? null,
     gradeChangesEnabled: false,
     explanation: incomplete
@@ -617,11 +744,11 @@ export function calibrationSummary(
     limitations: [
       "Workspaces are not independently verified law firms; more than one account can belong to one practice. Self-selected owner reports are not representative industry evidence. Minimum sample gates are privacy/readiness rules, not statistical-power guarantees.",
       "Both current assessment-benchmarking and separate outcome-research permissions are required. A permission change is rechecked before each analysis.",
-      "One earliest eligible non-overlapping period per workspace; missing values in that pair are not replaced with a later, more favorable period.",
+      "One pair per workspace: the earliest eligible preregistered period takes priority; otherwise the earliest eligible retrospective period. Missing values are not replaced with a later, more favorable period. As prospective evidence develops, retrospective cohort membership changes, so these are not stable longitudinal cohorts.",
       "Monthly-window pilot: only closed 28–31-day periods ending in the last 366 days. Other durations remain useful private tracking records but do not enter calibration.",
       "Baseline assessed and saved before the outcome period started, at most 90 days earlier; same published scoring release; at least 80% assessment coverage.",
-      "Outcome entry and the choice of an existing baseline are retrospective. The earlier assessment existed before the period, but the baseline/period link was not prospectively preregistered.",
-      "Fixed currency, source, baseline practice stage and fee-model groups are never pooled. Export-informed figures are still owner reports, not verified integrations. Practice area, selection and missingness can confound comparisons.",
+      "Prospective registrations lock an owned canonical baseline, dates, source, currency and context before the first UTC day begins, with an immutable server timestamp and baseline content hash. Outcome figures are still owner reported after the period and can be corrected. A registration is not a controlled experiment or proof of causation. Retrospective links stay in a separate evidence track.",
+      "Prospective and retrospective evidence tracks, currency, source, baseline practice stage and fee-model groups are never pooled. Export-informed figures are still owner reports, not verified integrations. Practice area, selection and missingness can confound comparisons.",
       "Medians are per-workspace outcomes, not ratios of pooled dollar or inquiry totals. Score bands describe readiness points, not legal quality or client outcomes.",
       "Spearman rank association uses average ranks for ties. Constant scores or outcomes have undefined association, shown as unavailable. No p-values, causal estimates or automatic weight changes are produced.",
       "Candidate weights are an in-memory sensitivity check, not a trained model. A stable workspace digest assigns roughly 70% to development and 30% to held-out comparison; each metric needs at least 100 pairs, 70 development and 30 held-out workspaces.",

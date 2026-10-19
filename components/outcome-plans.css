@@ -1,0 +1,63 @@
+.outcome-plans {
+  border-top: 1px solid var(--border, #d9e3df);
+  padding-top: 28px;
+  margin-top: 28px;
+  min-width: 0;
+}
+.outcome-plans form {
+  padding: 20px;
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 12px;
+}
+.outcome-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 16px;
+}
+.outcome-plan-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-weight: 600;
+  min-width: 0;
+}
+.outcome-plan-grid input,
+.outcome-plan-grid select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  padding: 11px;
+  border: 1px solid #c9d3c1;
+  border-radius: 6px;
+  color: #2d3d27;
+  background: white;
+  font: inherit;
+}
+.outcome-plan-list {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+}
+.outcome-plan-list article {
+  padding: 20px;
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.outcome-plan-list h3 {
+  font-size: 1.08rem;
+}
+.outcome-plans .btn {
+  white-space: normal;
+  max-width: 100%;
+}
+@media (max-width: 480px) {
+  .outcome-plans form,
+  .outcome-plan-list article {
+    padding: 14px;
+  }
+  .outcome-plan-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

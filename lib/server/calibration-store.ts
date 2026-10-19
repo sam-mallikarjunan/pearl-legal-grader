@@ -109,6 +109,8 @@ export function createCalibrationStore(d: CalibrationDependencies) {
             row.periods.length > 24 ||
             !Array.isArray(row.baselines) ||
             row.baselines.length > 24 ||
+            !Array.isArray(row.plans) ||
+            row.plans.length > 36 ||
             row.baselines.some(
               (b) =>
                 !accountRecord(b) ||

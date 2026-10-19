@@ -10,6 +10,7 @@ import type { AdminHelpRequest } from "../lib/server/research-store";
 import { AdminNurture } from "./NurtureEnrollment";
 import AdminCalibration from "./AdminCalibration";
 import AdminLeadRouting from "./AdminLeadRouting";
+import { AdminOutcomeReminders } from "./OutcomeReminders";
 import "./published-admin.css";
 
 interface Insights {
@@ -153,6 +154,7 @@ export default function AdminInsights() {
           </section>
           <AdminNurture />
           <AdminCalibration />
+          <AdminOutcomeReminders />
           <AdminLeadRouting />
           <section className="pa-card pa-summary">
             <div>

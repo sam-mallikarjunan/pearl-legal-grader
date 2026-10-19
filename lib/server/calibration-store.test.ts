@@ -28,6 +28,7 @@ function candidate(n: number) {
     workspaceId: uuid(n),
     benchmarking: true,
     outcomeResearch: true,
+    plans: [],
     periods: [
       {
         id: uuid(1000 + n),

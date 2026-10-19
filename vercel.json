@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/internal/scans/cleanup", "schedule": "17 3 * * *" },
-    { "path": "/api/cron/nurture", "schedule": "23 14 * * *" }
+    { "path": "/api/cron/nurture", "schedule": "23 14 * * *" },
+    { "path": "/api/cron/outcome-reminders", "schedule": "23 19 * * *" }
   ]
 }

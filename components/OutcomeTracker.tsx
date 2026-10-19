@@ -1,6 +1,15 @@
 "use client";
 import { useCallback, useEffect, useId, useState } from "react";
 import type { CloudReport } from "../lib/account/types";
+import type { OutcomePlan } from "../lib/outcome-plans";
+import {
+  closedOutcomeDatePreset,
+  OUTCOME_CSV_MAX_BYTES,
+  outcomeCsvTemplate,
+  parseOutcomeCsv,
+  repeatOutcomeSetup,
+  type OutcomeDatePreset,
+} from "../lib/outcome-import";
 import {
   calculateOutcomeMetrics,
   OUTCOME_COUNT_FIELDS,
@@ -14,6 +23,7 @@ import {
   type OutcomePeriod,
   type OutcomePeriodInput,
 } from "../lib/outcomes";
+import "./outcome-tracker.css";
 
 const labels = {
   inquiries: "New inquiries in this cohort",
@@ -38,8 +48,7 @@ type FormValues = Record<
   string
 >;
 const blank = (): FormValues => ({
-  startDate: "",
-  endDate: "",
+  ...closedOutcomeDatePreset("last_month"),
   baselineReportId: "",
   source: "self_reported",
   currency: "USD",
@@ -53,6 +62,23 @@ const blank = (): FormValues => ({
   cohortCollectedMinor: "",
   adminHours: "",
 });
+const formFromPeriod = (period: OutcomePeriodInput): FormValues => {
+  const next = blank();
+  for (const key of Object.keys(next) as Array<keyof FormValues>) {
+    const value = period[key];
+    next[key] =
+      value === null
+        ? ""
+        : OUTCOME_MONEY_FIELDS.includes(key as never)
+          ? (Number(value) / 100).toFixed(2)
+          : String(value);
+  }
+  return next;
+};
+const hasDetails = (period: OutcomePeriodInput) =>
+  ["contacted", "booked", "attended", ...OUTCOME_MONEY_FIELDS].some(
+    (key) => period[key as keyof OutcomePeriodInput] !== null,
+  );
 const rate = (n: number | null) =>
   n === null ? "Unknown" : `${(n * 100).toFixed(1)}%`;
 const amount = (n: number | null, currency: string) =>
@@ -69,8 +95,14 @@ function parseForm(form: FormValues): OutcomePeriodInput {
     source: form.source,
     currency: form.currency,
   };
-  for (const field of OUTCOME_COUNT_FIELDS)
-    value[field] = form[field].trim() ? Number(form[field]) : null;
+  for (const field of OUTCOME_COUNT_FIELDS) {
+    const raw = form[field].trim();
+    if (raw && !/^\d{1,7}$/.test(raw))
+      throw new Error(
+        "Enter non-negative whole counts, or leave unknown blank.",
+      );
+    value[field] = raw ? Number(raw) : null;
+  }
   for (const field of OUTCOME_MONEY_FIELDS) {
     const raw = form[field].trim();
     if (!raw) {
@@ -84,7 +116,12 @@ function parseForm(form: FormValues): OutcomePeriodInput {
     const [whole, fraction = ""] = raw.split(".");
     value[field] = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
   }
-  value.adminHours = form.adminHours.trim() ? Number(form.adminHours) : null;
+  const hours = form.adminHours.trim();
+  if (hours && !/^\d{1,5}(?:\.\d{1,2})?$/.test(hours))
+    throw new Error(
+      "Enter your own administrative hours with at most two decimal places, or leave unknown blank.",
+    );
+  value.adminHours = hours ? Number(hours) : null;
   return parseOutcomePeriodInput(value);
 }
 export default function OutcomeTracker({
@@ -99,6 +136,14 @@ export default function OutcomeTracker({
     [editing, setEditing] = useState<OutcomePeriod | null>(null),
     [deleting, setDeleting] = useState<string | null>(null),
     [research, setResearch] = useState(false),
+    [detailsOpen, setDetailsOpen] = useState(false),
+    [importOpen, setImportOpen] = useState(false),
+    [csvText, setCsvText] = useState(""),
+    [csvPreview, setCsvPreview] = useState<OutcomePeriodInput | null>(null),
+    [importMessage, setImportMessage] = useState(""),
+    [plans, setPlans] = useState<OutcomePlan[]>([]),
+    [selectedPlanId, setSelectedPlanId] = useState(""),
+    [planMessage, setPlanMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [message, setMessage] = useState("");
   const load = useCallback(async () => {
@@ -132,6 +177,36 @@ export default function OutcomeTracker({
   useEffect(() => {
     void load();
   }, [load]);
+  const loadPlans = useCallback(async () => {
+    try {
+      const response = await fetch("/api/account/outcome-plans", {
+        cache: "no-store",
+      });
+      const value = await response.json();
+      if (!response.ok || !Array.isArray(value.plans))
+        throw new Error(
+          "Registered periods could not load. Reload before reporting against a registered baseline.",
+        );
+      setPlans(value.plans);
+      setPlanMessage("");
+    } catch {
+      setPlanMessage(
+        "Registered periods could not load. Reload before reporting against a registered baseline.",
+      );
+    }
+  }, []);
+  useEffect(() => {
+    void loadPlans();
+    const onPlansChange = () => void loadPlans();
+    window.addEventListener("grader:outcome-plans-changed", onPlansChange);
+    return () =>
+      window.removeEventListener("grader:outcome-plans-changed", onPlansChange);
+  }, [loadPlans]);
+  const selectedPlan = plans.find((plan) => plan.id === selectedPlanId),
+    editingPlan = editing
+      ? plans.find((plan) => plan.outcomeId === editing.id)
+      : undefined,
+    frozenPlan = editingPlan || selectedPlan;
   const change = (field: keyof FormValues, value: string) =>
     setForm((previous) => ({ ...previous, [field]: value }));
   async function savePeriod(event: React.FormEvent) {
@@ -139,16 +214,36 @@ export default function OutcomeTracker({
     setBusy(true);
     setMessage("");
     try {
+      if (
+        selectedPlanId &&
+        (!selectedPlan || selectedPlan.status !== "registered")
+      )
+        throw new Error(
+          "This registered period is no longer available. Reload registered periods before saving.",
+        );
       const period = parseForm(form);
+      const values = Object.fromEntries(
+        [
+          ...OUTCOME_COUNT_FIELDS,
+          ...OUTCOME_MONEY_FIELDS,
+          "adminHours" as const,
+        ].map((field) => [field, period[field]]),
+      );
       const response = await fetch(
         editing
           ? `/api/account/outcomes/${editing.id}`
-          : "/api/account/outcomes",
+          : selectedPlan
+            ? `/api/account/outcome-plans/${selectedPlan.id}/report`
+            : "/api/account/outcomes",
         {
           method: editing ? "PATCH" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
-            editing ? { revision: editing.revision, period } : period,
+            editing
+              ? { revision: editing.revision, period }
+              : selectedPlan
+                ? { revision: selectedPlan.revision, values }
+                : period,
           ),
         },
       );
@@ -157,7 +252,10 @@ export default function OutcomeTracker({
         throw new Error(result.error || "This period could not be saved.");
       setForm(blank());
       setEditing(null);
+      setSelectedPlanId("");
+      setDetailsOpen(false);
       await load();
+      window.dispatchEvent(new Event("grader:outcome-plans-changed"));
       setMessage(
         "Business period saved privately. Your issued grade is unchanged.",
       );
@@ -172,22 +270,90 @@ export default function OutcomeTracker({
     }
   }
   function edit(period: OutcomePeriod) {
-    const next = blank();
-    for (const key of Object.keys(next) as Array<keyof FormValues>) {
-      const v = period[key];
-      next[key] =
-        v === null
-          ? ""
-          : OUTCOME_MONEY_FIELDS.includes(key as never)
-            ? (Number(v) / 100).toFixed(2)
-            : String(v);
-    }
-    setForm(next);
+    setForm(formFromPeriod(period));
     setEditing(period);
+    setSelectedPlanId("");
+    setDetailsOpen(hasDetails(period));
+    clearImport();
     setDeleting(null);
     setMessage(
       "Editing your saved period. Saving creates a new revision; the issued grade stays unchanged.",
     );
+  }
+  function clearImport() {
+    setCsvText("");
+    setCsvPreview(null);
+    setImportMessage("");
+    setImportOpen(false);
+  }
+  function usePreset(preset: OutcomeDatePreset) {
+    setForm((previous) => ({
+      ...previous,
+      ...closedOutcomeDatePreset(preset),
+    }));
+  }
+  function choosePlan(planId: string) {
+    const plan = plans.find((entry) => entry.id === planId);
+    setSelectedPlanId(planId);
+    setForm(
+      plan
+        ? {
+            ...blank(),
+            startDate: plan.startDate,
+            endDate: plan.endDate,
+            source: plan.source,
+            currency: plan.currency,
+            baselineReportId: plan.baselineReportId || "",
+          }
+        : blank(),
+    );
+    setDetailsOpen(false);
+    clearImport();
+    setMessage(
+      plan
+        ? "Dates, source, currency and baseline are fixed by your registration. Enter only this period’s known totals."
+        : "New unregistered period. All totals are blank.",
+    );
+  }
+  function repeatSetup(period: OutcomePeriod) {
+    setForm(formFromPeriod(repeatOutcomeSetup(period)));
+    setEditing(null);
+    setSelectedPlanId("");
+    setDeleting(null);
+    setDetailsOpen(hasDetails(period));
+    clearImport();
+    setMessage(
+      "Source, currency and optional sections reused. All numbers and the baseline link are blank. Choose a closed date range that does not overlap a saved period.",
+    );
+    document.getElementById(`${id}-start`)?.focus();
+  }
+  function previewImport() {
+    setCsvPreview(null);
+    try {
+      setCsvPreview(parseOutcomeCsv(csvText));
+      setImportMessage(
+        "Preview ready. Review these totals before using them in the form.",
+      );
+    } catch (error) {
+      setImportMessage(
+        error instanceof Error
+          ? error.message
+          : "This aggregate row could not be read.",
+      );
+    } finally {
+      // Keep only validated aggregates in memory, including after a rejected paste.
+      setCsvText("");
+    }
+  }
+  function downloadTemplate() {
+    const url = URL.createObjectURL(
+      new Blob([outcomeCsvTemplate()], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "pearl-business-period-template.csv";
+    link.click();
+    URL.revokeObjectURL(url);
   }
   async function remove(period: OutcomePeriod) {
     setBusy(true);
@@ -207,6 +373,7 @@ export default function OutcomeTracker({
         setForm(blank());
       }
       await load();
+      window.dispatchEvent(new Event("grader:outcome-plans-changed"));
       setMessage(
         "Business period deleted. Minimal change history remains in your private account export.",
       );
@@ -281,19 +448,85 @@ export default function OutcomeTracker({
       </p>
       {data ? (
         <>
-          <form onSubmit={(event) => void savePeriod(event)}>
+          <form
+            onSubmit={(event) => void savePeriod(event)}
+            className="outcome-form"
+          >
             <h4>
               {editing ? "Edit business period" : "Add a business period"} ·{" "}
               {data.periods.length}/24 saved
             </h4>
+            <p>Start with any of the three totals below. The rest can wait.</p>
+            {!editing && (
+              <label className="field-label" htmlFor={`${id}-plan`}>
+                Report a registered period (optional)
+                <select
+                  id={`${id}-plan`}
+                  aria-label="Report a registered period (optional)"
+                  value={selectedPlanId}
+                  disabled={busy}
+                  onChange={(event) => choosePlan(event.target.value)}
+                >
+                  <option value="">Add an unregistered closed period</option>
+                  {plans
+                    .filter((plan) => plan.status === "registered")
+                    .map((plan) => (
+                      <option
+                        key={plan.id}
+                        value={plan.id}
+                        disabled={plan.endDate > yesterday}
+                      >
+                        {plan.startDate} to {plan.endDate}
+                        {plan.endDate > yesterday
+                          ? " · opens after period ends"
+                          : " · ready to report"}
+                      </option>
+                    ))}
+                </select>
+              </label>
+            )}
+            {planMessage && (
+              <p role="status">
+                {planMessage}{" "}
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={() => void loadPlans()}
+                >
+                  Reload registered periods
+                </button>
+              </p>
+            )}
+            {frozenPlan && (
+              <p className="outcome-fixed-note">
+                This period uses its registered dates, source, currency and
+                earlier baseline. You can correct totals without changing that
+                setup.
+              </p>
+            )}
             <div
-              style={{
-                display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                gap: 16,
-              }}
+              className="outcome-actions"
+              aria-label="Closed period date presets"
             >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy || !!frozenPlan}
+                onClick={() => usePreset("last_month")}
+              >
+                Last calendar month
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy || !!frozenPlan}
+                onClick={() => usePreset("last_30_days")}
+              >
+                Last 30 complete days
+              </button>
+            </div>
+            <div className="outcome-grid">
               <label className="field-label" htmlFor={`${id}-start`}>
                 Start date
                 <input
@@ -302,7 +535,7 @@ export default function OutcomeTracker({
                   required
                   value={form.startDate}
                   max={yesterday}
-                  disabled={busy}
+                  disabled={busy || !!frozenPlan}
                   onChange={(e) => change("startDate", e.target.value)}
                 />
               </label>
@@ -314,7 +547,7 @@ export default function OutcomeTracker({
                   required
                   value={form.endDate}
                   max={yesterday}
-                  disabled={busy}
+                  disabled={busy || !!frozenPlan}
                   onChange={(e) => change("endDate", e.target.value)}
                 />
               </label>
@@ -324,7 +557,7 @@ export default function OutcomeTracker({
                   id={`${id}-source`}
                   aria-label="Source"
                   value={form.source}
-                  disabled={busy}
+                  disabled={busy || !!frozenPlan}
                   onChange={(e) => change("source", e.target.value)}
                 >
                   <option value="self_reported">Typed from my records</option>
@@ -337,169 +570,176 @@ export default function OutcomeTracker({
                   id={`${id}-currency`}
                   aria-label="Currency for this whole period"
                   value={form.currency}
-                  disabled={busy}
+                  disabled={busy || !!frozenPlan}
                   onChange={(e) => change("currency", e.target.value)}
                 >
-                  {OUTCOME_CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
+                  {OUTCOME_CURRENCIES.map((currency) => (
+                    <option key={currency} value={currency}>
+                      {currency}
                     </option>
                   ))}
                 </select>
               </label>
             </div>
-            <label
-              className="field-label"
-              htmlFor={`${id}-baseline`}
-              style={{ display: "block", marginTop: 16 }}
-            >
-              Earlier saved baseline (optional)
-              <select
-                id={`${id}-baseline`}
-                aria-label="Earlier saved baseline (optional)"
-                value={form.baselineReportId}
-                disabled={busy}
-                onChange={(e) => change("baselineReportId", e.target.value)}
-              >
-                <option value="">Keep this period unlinked</option>
-                {reports.map((r) => (
-                  <option
-                    key={r.id}
-                    value={r.id}
-                    disabled={
-                      !!form.startDate &&
-                      (Date.parse(r.savedAt) >
-                        Date.parse(`${form.startDate}T00:00:00.000Z`) ||
-                        Date.parse(r.snapshot.createdAt) >
-                          Date.parse(`${form.startDate}T00:00:00.000Z`))
-                    }
-                  >
-                    {new Date(r.snapshot.createdAt).toLocaleDateString()} ·{" "}
-                    {r.snapshot.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <p>
-              A linked report must have been assessed and saved before the
-              period started. Leaving it unlinked still lets you track your own
-              results.
-            </p>
-            <fieldset
-              disabled={busy}
-              style={{ border: 0, padding: 0, margin: "24px 0" }}
-            >
+            <fieldset disabled={busy} className="outcome-fieldset">
               <legend>
-                <strong>The same inquiry cohort, through the period end</strong>
+                <strong>Three useful starting points</strong>
               </legend>
               <p>
-                Count inquiries that entered during these dates, then how many
-                of those same inquiries reached each stage by the end date.
-                Later stages cannot exceed earlier known counts.
+                Inquiries first received during these dates, and how many of
+                those same inquiries became clients by the end date. Your own
+                administration time covers the whole period.
               </p>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                  gap: 16,
-                }}
-              >
-                {OUTCOME_COUNT_FIELDS.map((field) => (
-                  <label
-                    className="field-label"
-                    key={field}
-                    htmlFor={`${id}-${field}`}
-                  >
-                    {labels[field]}
-                    <input
-                      id={`${id}-${field}`}
-                      type="number"
-                      inputMode="numeric"
-                      min={0}
-                      max={1000000}
-                      step={1}
-                      placeholder="Unknown"
-                      value={form[field]}
-                      onChange={(e) => change(field, e.target.value)}
-                    />
-                  </label>
-                ))}
+              <div className="outcome-grid outcome-core">
+                {(["inquiries", "clients", "adminHours"] as const).map(
+                  (field) => (
+                    <label
+                      className="field-label"
+                      key={field}
+                      htmlFor={`${id}-${field}`}
+                    >
+                      {labels[field]}
+                      <input
+                        id={`${id}-${field}`}
+                        type="number"
+                        inputMode={
+                          field === "adminHours" ? "decimal" : "numeric"
+                        }
+                        min={0}
+                        max={
+                          field === "adminHours"
+                            ? Number.isFinite(days)
+                              ? days * 24
+                              : 8784
+                            : 1000000
+                        }
+                        step={field === "adminHours" ? "0.01" : 1}
+                        placeholder="Unknown"
+                        value={form[field]}
+                        onChange={(e) => change(field, e.target.value)}
+                      />
+                    </label>
+                  ),
+                )}
               </div>
+              <p className="outcome-note">
+                Leave any total you do not know blank. Zero means you know there
+                were none. Administrative hours are yours, not the team’s
+                combined hours.
+              </p>
             </fieldset>
-            <fieldset
-              disabled={busy}
-              style={{ border: 0, padding: 0, margin: "24px 0" }}
+            <details
+              className="outcome-details"
+              open={detailsOpen}
+              onToggle={(event) => setDetailsOpen(event.currentTarget.open)}
             >
-              <legend>
-                <strong>Money with explicit cohorts ({form.currency})</strong>
-              </legend>
+              <summary>More funnel and invoice details (optional)</summary>
+              <fieldset disabled={busy} className="outcome-fieldset">
+                <legend>
+                  <strong>
+                    The same inquiry cohort, through the period end
+                  </strong>
+                </legend>
+                <p>
+                  Of the inquiries entered above, how many reached each stage by
+                  the end date? Later stages cannot exceed earlier known counts.
+                </p>
+                <div className="outcome-grid">
+                  {(["contacted", "booked", "attended"] as const).map(
+                    (field) => (
+                      <label
+                        className="field-label"
+                        key={field}
+                        htmlFor={`${id}-${field}`}
+                      >
+                        {labels[field]}
+                        <input
+                          id={`${id}-${field}`}
+                          type="number"
+                          inputMode="numeric"
+                          min={0}
+                          max={1000000}
+                          step={1}
+                          placeholder="Unknown"
+                          value={form[field]}
+                          onChange={(e) => change(field, e.target.value)}
+                        />
+                      </label>
+                    ),
+                  )}
+                </div>
+              </fieldset>
+              <fieldset disabled={busy} className="outcome-fieldset">
+                <legend>
+                  <strong>Money with explicit cohorts ({form.currency})</strong>
+                </legend>
+                <p>
+                  Enter ordinary currency amounts with up to two decimal places.
+                  Acquisition spend belongs to the inquiry cohort above. Billed
+                  money covers invoices issued during these dates; collected
+                  money covers only payments on those same invoices received by
+                  the period end. Do not substitute all cash received during the
+                  period.
+                </p>
+                <div className="outcome-grid">
+                  {OUTCOME_MONEY_FIELDS.map((field) => (
+                    <label
+                      className="field-label"
+                      key={field}
+                      htmlFor={`${id}-${field}`}
+                    >
+                      {labels[field]}
+                      <input
+                        id={`${id}-${field}`}
+                        type="number"
+                        inputMode="decimal"
+                        min={0}
+                        max={100000000}
+                        step="0.01"
+                        placeholder="Unknown"
+                        value={form[field]}
+                        onChange={(e) => change(field, e.target.value)}
+                      />
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <label className="field-label" htmlFor={`${id}-baseline`}>
+                Earlier saved baseline (optional)
+                <select
+                  id={`${id}-baseline`}
+                  aria-label="Earlier saved baseline (optional)"
+                  value={form.baselineReportId}
+                  disabled={busy || !!frozenPlan}
+                  onChange={(e) => change("baselineReportId", e.target.value)}
+                >
+                  <option value="">Keep this period unlinked</option>
+                  {reports.map((report) => (
+                    <option
+                      key={report.id}
+                      value={report.id}
+                      disabled={
+                        !!form.startDate &&
+                        (Date.parse(report.savedAt) >
+                          Date.parse(`${form.startDate}T00:00:00.000Z`) ||
+                          Date.parse(report.snapshot.createdAt) >
+                            Date.parse(`${form.startDate}T00:00:00.000Z`))
+                      }
+                    >
+                      {new Date(report.snapshot.createdAt).toLocaleDateString()}{" "}
+                      · {report.snapshot.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <p>
-                Enter ordinary currency amounts, with up to two decimal places.
-                Acquisition spend belongs to the inquiry cohort above. Billed
-                money covers invoices issued during these dates; collected money
-                covers only payments on those same invoices received by the
-                period end. Do not substitute all cash received during the
-                period.
+                A linked report must have been assessed and saved before the
+                period started. Leaving it unlinked still lets you track your
+                own results. A baseline chosen afterward is a retrospective
+                link.
               </p>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns:
-                    "repeat(auto-fit, minmax(min(100%, 220px), 1fr))",
-                  gap: 16,
-                }}
-              >
-                {OUTCOME_MONEY_FIELDS.map((field) => (
-                  <label
-                    className="field-label"
-                    key={field}
-                    htmlFor={`${id}-${field}`}
-                  >
-                    {labels[field]}
-                    <input
-                      id={`${id}-${field}`}
-                      type="number"
-                      inputMode="decimal"
-                      min={0}
-                      max={100000000}
-                      step="0.01"
-                      placeholder="Unknown"
-                      value={form[field]}
-                      onChange={(e) => change(field, e.target.value)}
-                    />
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-            <label className="field-label" htmlFor={`${id}-hours`}>
-              {labels.adminHours}
-              <input
-                id={`${id}-hours`}
-                type="number"
-                inputMode="decimal"
-                min={0}
-                max={Number.isFinite(days) ? days * 24 : 8784}
-                step="0.01"
-                placeholder="Unknown"
-                value={form.adminHours}
-                disabled={busy}
-                onChange={(e) => change("adminHours", e.target.value)}
-              />
-            </label>
-            <p>
-              Your own time on business administration during the whole date
-              range, rather than your team’s combined hours. This is a
-              period-level time measure, separate from the inquiry cohort.
-            </p>
-            <div
-              style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: 12,
-                marginTop: 20,
-              }}
-            >
+            </details>
+            <div className="outcome-actions">
               <button
                 className="btn btn-primary"
                 type="submit"
@@ -519,6 +759,7 @@ export default function OutcomeTracker({
                   onClick={() => {
                     setEditing(null);
                     setForm(blank());
+                    setDetailsOpen(false);
                   }}
                 >
                   Cancel editing
@@ -526,6 +767,131 @@ export default function OutcomeTracker({
               )}
             </div>
           </form>
+          {!editing && !selectedPlanId && (
+            <details
+              className="outcome-details outcome-import"
+              open={importOpen}
+              onToggle={(event) => {
+                setImportOpen(event.currentTarget.open);
+                if (!event.currentTarget.open) {
+                  setCsvText("");
+                  setCsvPreview(null);
+                  setImportMessage("");
+                }
+              }}
+            >
+              <summary>
+                Use one row of aggregate totals from a spreadsheet
+              </summary>
+              <p>
+                Download the template, fill one totals row, then paste it here.
+                No client, matter or contact rows. Currency amounts use ordinary
+                units, for example 123.45. Empty cells stay unknown.
+              </p>
+              <p>
+                Only the template’s named columns are accepted. This is a local
+                preview, not a connection to or verification of your records.
+                Raw CSV is cleared after preview and is never uploaded or
+                stored.
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                disabled={busy}
+                onClick={downloadTemplate}
+              >
+                Download aggregate CSV template
+              </button>
+              <label className="field-label" htmlFor={`${id}-csv`}>
+                Paste aggregate CSV (one header row and one totals row)
+                <textarea
+                  id={`${id}-csv`}
+                  rows={5}
+                  maxLength={OUTCOME_CSV_MAX_BYTES}
+                  value={csvText}
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={busy}
+                  onChange={(event) => {
+                    setCsvText(event.target.value);
+                    setCsvPreview(null);
+                    setImportMessage("");
+                  }}
+                />
+              </label>
+              <div className="outcome-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy || !csvText.trim()}
+                  onClick={previewImport}
+                >
+                  Preview totals locally
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={busy}
+                  onClick={clearImport}
+                >
+                  Clear import
+                </button>
+              </div>
+              <p role="status" aria-live="polite">
+                {importMessage}
+              </p>
+              {csvPreview && (
+                <section
+                  aria-labelledby={`${id}-preview`}
+                  className="outcome-import-preview"
+                >
+                  <h4 id={`${id}-preview`}>Review aggregate totals</h4>
+                  <p>
+                    {csvPreview.startDate} to {csvPreview.endDate} ·{" "}
+                    {csvPreview.currency} ·{" "}
+                    {csvPreview.source === "export"
+                      ? "Copied from an export"
+                      : "Typed from my records"}
+                  </p>
+                  <dl className="outcome-preview-grid">
+                    {[
+                      ...OUTCOME_COUNT_FIELDS,
+                      ...OUTCOME_MONEY_FIELDS,
+                      "adminHours" as const,
+                    ].map((field) => (
+                      <div key={field}>
+                        <dt>{labels[field]}</dt>
+                        <dd>
+                          {OUTCOME_MONEY_FIELDS.includes(field as never)
+                            ? amount(csvPreview[field], csvPreview.currency)
+                            : csvPreview[field] === null
+                              ? "Unknown"
+                              : csvPreview[field]}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busy}
+                    onClick={() => {
+                      setForm(formFromPeriod(csvPreview));
+                      setDetailsOpen(hasDetails(csvPreview));
+                      clearImport();
+                      setMessage(
+                        "Totals copied into the form. Review them, then choose Save business period. Nothing has been saved yet.",
+                      );
+                      document.getElementById(`${id}-start`)?.focus();
+                    }}
+                  >
+                    Use these totals in the form
+                  </button>
+                </section>
+              )}
+            </details>
+          )}
+
           <section aria-labelledby={`${id}-history`} style={{ marginTop: 32 }}>
             <h4 id={`${id}-history`}>Your saved periods</h4>
             {data.periods.length === 0 ? (
@@ -620,6 +986,14 @@ export default function OutcomeTracker({
                         onClick={() => edit(period)}
                       >
                         Edit period
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={() => repeatSetup(period)}
+                      >
+                        Use setup for a new period
                       </button>
                       <button
                         type="button"

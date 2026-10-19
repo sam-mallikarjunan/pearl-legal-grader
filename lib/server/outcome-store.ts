@@ -104,6 +104,14 @@ function machineError(value: unknown) {
       "This account has reached its research opt-in change allowance. Withdrawal remains available.",
       429,
     ],
+    outcome_plan_frozen: [
+      "This planned period has frozen dates, source, currency and baseline. Only its numbers can change.",
+      409,
+    ],
+    outcome_plan_overlap: [
+      "This period overlaps a registered plan. Use that plan to report its results, or choose a separate period.",
+      409,
+    ],
     outcome_baseline_invalid: [
       "Choose an owned saved report assessed and saved before this period started, or leave the period unlinked.",
       409,

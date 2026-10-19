@@ -11,6 +11,8 @@ import { leaderboardStore } from "../../../../lib/server/leaderboard-store";
 import { exportOwnNurture } from "../../../../lib/server/nurture-store";
 import { exportOwnOutcomes } from "../../../../lib/server/outcome-store";
 import { leadRoutingStore } from "../../../../lib/server/lead-routing-store";
+import { exportOwnOutcomePlans } from "../../../../lib/server/outcome-plan-store";
+import { exportOwnOutcomeReminders } from "../../../../lib/server/outcome-reminder-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -24,6 +26,8 @@ export async function GET(request: Request) {
       nurture,
       outcomes,
       requestedContactAccess,
+      outcomePlans,
+      outcomeReminders,
     ] = await Promise.all([
       exportAccount(user.id),
       researchStore().ownRequests(user.id),
@@ -33,6 +37,8 @@ export async function GET(request: Request) {
       exportOwnNurture(user.id),
       exportOwnOutcomes(user.id),
       leadRoutingStore().exportOwn(user.id),
+      exportOwnOutcomePlans(user.id),
+      exportOwnOutcomeReminders(user.id),
     ]);
     return Response.json(
       {
@@ -44,6 +50,8 @@ export async function GET(request: Request) {
         nurture,
         outcomes,
         requestedContactAccess,
+        outcomePlans,
+        outcomeReminders,
       },
       {
         headers: {

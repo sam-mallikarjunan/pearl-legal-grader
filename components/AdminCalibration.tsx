@@ -146,6 +146,24 @@ export default function AdminCalibration() {
             </p>
           </div>
           <div className="calibration-fixed-metrics">
+            {data.evidenceTracks?.map((track) => (
+              <div key={track.provenance}>
+                <strong>
+                  {track.provenance === "preregistered"
+                    ? "Registered before the period"
+                    : "Retrospective baseline links"}
+                </strong>
+                <p>
+                  {track.status === "descriptive"
+                    ? "Exploratory descriptions available"
+                    : "Evidence still forming"}{" "}
+                  · {track.eligibleWorkspaces ?? "Count suppressed below 30"}.
+                  These tracks are never pooled.
+                </p>
+              </div>
+            ))}
+          </div>
+          <div className="calibration-fixed-metrics">
             <div>
               <strong>Inquiry → client</strong>
               <p>
@@ -177,17 +195,18 @@ export default function AdminCalibration() {
           ) : (
             visible.map((cohort) => (
               <article
-                key={`${cohort.currency}-${cohort.source}-${cohort.stage}-${cohort.feeModel}`}
+                key={`${cohort.provenance}-${cohort.currency}-${cohort.source}-${cohort.stage}-${cohort.feeModel}`}
                 className="calibration-cohort"
               >
                 <h3>
-                  {cohort.currency} · {cohort.stage} · {cohort.feeModel} fees ·{" "}
-                  {cohort.sourceLabel}
+                  {cohort.provenanceLabel} · {cohort.currency} · {cohort.stage}{" "}
+                  · {cohort.feeModel} fees · {cohort.sourceLabel}
                 </h3>
                 <p className="fine-print">
                   {cohort.workspaces ?? "Suppressed"} independent workspaces,
-                  one eligible monthly period each. Different currency, source,
-                  practice stage and fee-model groups are not pooled.
+                  one eligible monthly period each. Different registration
+                  track, currency, source, practice stage and fee-model groups
+                  are not pooled.
                 </p>
                 {cohort.metrics.map((metric) => (
                   <div key={metric.id} className="calibration-metric">

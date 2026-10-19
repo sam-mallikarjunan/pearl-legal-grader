@@ -355,3 +355,134 @@ test("aggregate output excludes raw identity and business values and candidate w
   ])
     assert.equal(parseCalibrationWeights(invalid), null);
 });
+
+test("genuine preregistered baseline hashes/times/context are required and never pooled with retrospective evidence", () => {
+  const fixture = calibrationFixture();
+  const p = fixture.periods[0] as Record<string, unknown>;
+  const baseline = fixture.baselines[0];
+  baseline.contentHash = "a".repeat(64);
+  const plan = {
+    id: "10000000-0000-4000-8000-000000000001",
+    requestId: "10000000-0000-4000-8000-000000000002",
+    revision: 1,
+    startDate: p.startDate,
+    endDate: p.endDate,
+    source: p.source,
+    currency: p.currency,
+    baselineReportId: baselineId,
+    baselineReleaseId: DEFAULT_RELEASE.id,
+    baselineStage: SAMPLE_CONTEXT.stage,
+    baselineFeeModel: SAMPLE_CONTEXT.feeModel,
+    status: "reported",
+    outcomeId: periodId,
+    createdAt: "2026-08-31T13:00:00Z",
+    updatedAt: "2026-10-01T01:00:00Z",
+    reportedAt: "2026-10-01T01:00:00Z",
+    withdrawnAt: null,
+    baselineContentHash: "a".repeat(64),
+  };
+  fixture.plans = [plan];
+  const deletedPlan = {
+    ...plan,
+    status: "withdrawn",
+    outcomeId: null,
+    withdrawnAt: "2026-10-02T00:00:00Z",
+  };
+  assert.equal(
+    projectCalibrationSource(
+      { ...fixture, plans: [deletedPlan] },
+      DEFAULT_RELEASE,
+      () => key(1),
+      now,
+    ).eligible,
+    false,
+  );
+  const result = projectCalibrationSource(
+    fixture,
+    DEFAULT_RELEASE,
+    () => key(1),
+    now,
+  );
+  assert.equal(result.eligible, true);
+  if (result.eligible) assert.equal(result.pair.provenance, "preregistered");
+  for (const change of [
+    { createdAt: "2026-09-01T00:00:00Z" },
+    { createdAt: "2026-08-31T12:00:00Z" },
+    { baselineContentHash: "b".repeat(64) },
+    { baselineFeeModel: "flat" },
+    { source: "export" },
+    { reportedAt: "2026-09-30T12:00:00Z" },
+    { status: "withdrawn", withdrawnAt: "2026-10-02T00:00:00Z" },
+  ])
+    assert.equal(
+      projectCalibrationSource(
+        { ...fixture, plans: [{ ...plan, ...change }] },
+        DEFAULT_RELEASE,
+        () => key(1),
+        now,
+      ).eligible,
+      false,
+    );
+  const mixed = pairs(30).map((p, i) => ({
+    ...p,
+    provenance:
+      i < 15 ? ("preregistered" as const) : ("retrospective" as const),
+  }));
+  const summary = calibrationSummary(
+    { pairs: mixed, candidateWorkspaces: 30, excluded: {}, truncated: false },
+    DEFAULT_RELEASE,
+  );
+  assert.equal(summary.cohorts.length, 0);
+  assert.equal(summary.evidenceTracks.length, 2);
+  assert(summary.evidenceTracks.every((t) => t.status === "forming"));
+});
+test("prospective-first one-workspace selection is deterministic and does not replace missing values", () => {
+  const fixture = calibrationFixture();
+  const old = fixture.periods[0] as Record<string, unknown>;
+  const newId = "10000000-0000-4000-8000-000000000003";
+  fixture.periods = [
+    old,
+    {
+      ...old,
+      id: newId,
+      startDate: "2026-10-01",
+      endDate: "2026-10-31",
+      inquiries: null,
+      clients: null,
+    },
+  ];
+  fixture.baselines[0].contentHash = "a".repeat(64);
+  fixture.plans = [
+    {
+      id: "10000000-0000-4000-8000-000000000004",
+      requestId: "10000000-0000-4000-8000-000000000005",
+      revision: 1,
+      startDate: "2026-10-01",
+      endDate: "2026-10-31",
+      source: "self_reported",
+      currency: "USD",
+      baselineReportId: baselineId,
+      baselineReleaseId: DEFAULT_RELEASE.id,
+      baselineStage: SAMPLE_CONTEXT.stage,
+      baselineFeeModel: SAMPLE_CONTEXT.feeModel,
+      status: "reported",
+      outcomeId: newId,
+      createdAt: "2026-09-30T13:00:00Z",
+      updatedAt: "2026-11-01T01:00:00Z",
+      reportedAt: "2026-11-01T01:00:00Z",
+      withdrawnAt: null,
+      baselineContentHash: "a".repeat(64),
+    },
+  ];
+  const result = projectCalibrationSource(
+    fixture,
+    DEFAULT_RELEASE,
+    () => key(1),
+    new Date("2026-11-02T00:00:00Z"),
+  );
+  assert(result.eligible);
+  if (result.eligible) {
+    assert.equal(result.pair.provenance, "preregistered");
+    assert.equal(result.pair.outcomes.inquiry_client_fraction, null);
+  }
+});

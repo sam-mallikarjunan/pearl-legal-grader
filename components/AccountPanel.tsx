@@ -38,6 +38,8 @@ import WebsiteAIReview from "./WebsiteAIReview";
 import LeaderboardEnrollment from "./LeaderboardEnrollment";
 import NurtureEnrollment from "./NurtureEnrollment";
 import OutcomeTracker from "./OutcomeTracker";
+import OutcomePlans from "./OutcomePlans";
+import OutcomeReminders from "./OutcomeReminders";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -1367,10 +1369,10 @@ export default function AccountPanel({
               <p className="fine-print">
                 These are separate choices, not requirements for using the
                 grader. Device-only interest settings are never copied into
-                account consent. Reminders and public recognition are not
-                activated by saving a choice alone. Use the separate enrollment
-                controls below to publish an anonymous entry or join the weekly
-                email series.
+                account consent. The action-reminder choice records interest
+                while that feature is being built. Use the separate controls
+                below for reporting reminders, an anonymous leaderboard entry or
+                the weekly email series.
               </p>
               <div className="preference-list">
                 {(
@@ -1436,6 +1438,11 @@ export default function AccountPanel({
             key={`outcomes-${user.id}`}
             baselineReports={reports}
           />
+          <OutcomePlans
+            key={`outcome-plans-${user.id}`}
+            baselineReports={reports}
+          />
+          <OutcomeReminders key={`outcome-reminders-${user.id}`} />
           <NurtureEnrollment
             key={`learning-${user.id}-${preferences?.revision ?? 0}`}
             onPreferencesChanged={() => loadPrivate()}
@@ -1459,10 +1466,11 @@ export default function AccountPanel({
             <p className="fine-print">
               This deletes your email sign-in account and its private reports,
               action progress, explanations, preferences, leaderboard entry,
-              email-series enrollment, outcome records and contact requests.
-              Download an account export first if you want a copy. Device copies
-              remain separate. Shared public website checks expire after 30
-              days; provider logs and backups follow their own retention. Hashed
+              email-series enrollment, outcome records, reporting plans,
+              reporting-reminder preferences and contact requests. Download an
+              account export first if you want a copy. Device copies remain
+              separate. Shared public website checks expire after 30 days;
+              provider logs and backups follow their own retention. Hashed
               abuse-prevention counters expire after their separate 48-hour
               window.
             </p>

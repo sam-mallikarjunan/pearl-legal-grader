@@ -5,6 +5,7 @@ import { purgeReportEmails } from "../../../../../lib/server/report-email";
 import { purgeAIReviewUsage } from "../../../../../lib/server/ai-review";
 import { purgeNurture } from "../../../../../lib/server/nurture-store";
 import { purgeContactViews } from "../../../../../lib/server/lead-routing-store";
+import { purgeOutcomeReminders } from "../../../../../lib/server/outcome-reminder-store";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const headers = { "Cache-Control": "no-store" };
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
       purgeAIReviewUsage(),
       purgeNurture(),
       purgeContactViews(),
+      purgeOutcomeReminders(),
     ]);
     return Response.json({ ok: true }, { headers });
   } catch {
