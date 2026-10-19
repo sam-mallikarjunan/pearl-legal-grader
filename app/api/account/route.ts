@@ -6,6 +6,7 @@ import {
   boundedAccountBody,
   guardAccountMutation,
   requireAccount,
+  requireRecentAccountAuthentication,
 } from "../../../lib/server/account-auth";
 export const runtime = "nodejs";
 export async function DELETE(request: Request) {
@@ -19,13 +20,7 @@ export async function DELETE(request: Request) {
         "Type DELETE MY ACCOUNT to confirm deletion.",
       );
     const client = await accountClient();
-    const fresh = await client.auth.getUser();
-    const signedAt = Date.parse(fresh.data.user?.last_sign_in_at || "");
-    if (!Number.isFinite(signedAt) || Date.now() - signedAt > 15 * 60 * 1000)
-      throw new AccountAuthError(
-        403,
-        "Sign in again with a new code before deleting your private workspace.",
-      );
+    await requireRecentAccountAuthentication(client.auth, user.id);
     const deleted = await accountAdminClient().auth.admin.deleteUser(user.id);
     if (deleted.error)
       throw new AccountAuthError(

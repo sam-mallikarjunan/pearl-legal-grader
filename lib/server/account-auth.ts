@@ -99,6 +99,78 @@ export async function requireAccount(
   if (!user) throw new AccountAuthError();
   return user;
 }
+interface RecentSessionVerifier {
+  getUser(): Promise<{
+    data: { user: { id: string; email_confirmed_at?: string } | null };
+    error: unknown;
+  }>;
+  getClaims(): Promise<{
+    data: { claims: unknown } | null;
+    error: unknown;
+  }>;
+}
+/** Use only SDK-verified current-session AMR, never decoded cookies, token issue time or user metadata. */
+export async function requireRecentAccountAuthentication(
+  auth: RecentSessionVerifier,
+  userId: string,
+  now = Date.now(),
+): Promise<void> {
+  const stale = () =>
+    new AccountAuthError(
+      403,
+      "Sign in again with a new code before deleting your private workspace.",
+    );
+  let fresh, verified;
+  try {
+    // Keep the live user check: signature validity alone does not establish that an account still exists.
+    [fresh, verified] = await Promise.all([auth.getUser(), auth.getClaims()]);
+  } catch {
+    throw stale();
+  }
+  if (
+    fresh.error ||
+    fresh.data.user?.id !== userId ||
+    !fresh.data.user.email_confirmed_at
+  )
+    throw new AccountAuthError();
+  const claims = verified.data?.claims;
+  if (
+    verified.error ||
+    !claims ||
+    typeof claims !== "object" ||
+    Array.isArray(claims)
+  )
+    throw stale();
+  const fields = claims as Record<string, unknown>;
+  if (
+    fields.sub !== userId ||
+    fields.role !== "authenticated" ||
+    typeof fields.session_id !== "string" ||
+    !/^[a-f\d]{8}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{4}-[a-f\d]{12}$/i.test(
+      fields.session_id,
+    ) ||
+    !Array.isArray(fields.amr) ||
+    fields.amr.length > 32 ||
+    !Number.isFinite(now)
+  )
+    throw stale();
+  const seconds = Math.floor(now / 1000);
+  const recent = fields.amr.some((entry: unknown) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry))
+      return false;
+    const item = entry as Record<string, unknown>;
+    // These are the interactive email-code methods supported by this app. Refresh is not reauthentication.
+    return (
+      (item.method === "otp" || item.method === "magiclink") &&
+      typeof item.timestamp === "number" &&
+      Number.isSafeInteger(item.timestamp) &&
+      item.timestamp > 0 &&
+      item.timestamp >= seconds - 15 * 60 &&
+      item.timestamp <= seconds + 30
+    );
+  });
+  if (!recent) throw stale();
+}
 export async function requireOperator(
   request: Request,
 ): Promise<AccountIdentity> {
