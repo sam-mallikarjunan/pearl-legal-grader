@@ -1,0 +1,71 @@
+.personalized-actions {
+  min-width: 0;
+}
+.personalized-actions .field-grid > *,
+.personalized-actions .field-label {
+  min-width: 0;
+}
+.personalized-actions select,
+.personalized-actions input[type="date"] {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  width: 100%;
+}
+.personalized-step-list {
+  display: grid;
+  gap: 1rem;
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+}
+.personalized-step {
+  border: 1px solid var(--line, #dce3e8);
+  border-radius: 14px;
+  min-width: 0;
+  padding: 1rem;
+  overflow-wrap: anywhere;
+}
+.personalized-step h4 {
+  font-size: 1.1rem;
+  margin: 0.25rem 0 0.75rem;
+}
+.personalized-step ul,
+.personalized-step details ol {
+  padding-left: 1.3rem;
+}
+.personalized-step details {
+  margin: 0.75rem 0;
+}
+.personalized-measure,
+.personalized-scope {
+  background: var(--surface-soft, #f5f7f8);
+  border-radius: 10px;
+  padding: 0.8rem;
+}
+.personalized-step .action-controls {
+  flex-wrap: wrap;
+}
+.personalized-step .action-guide {
+  min-width: 0;
+}
+.personalized-actions .check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+.personalized-actions .check-row input {
+  flex: 0 0 auto;
+  margin-top: 0.25rem;
+}
+@media (max-width: 600px) {
+  .personalized-actions .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .personalized-step {
+    padding: 0.8rem;
+  }
+  .personalized-step .btn {
+    white-space: normal;
+  }
+}

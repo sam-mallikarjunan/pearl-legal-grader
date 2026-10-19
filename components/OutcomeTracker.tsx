@@ -176,6 +176,13 @@ export default function OutcomeTracker({
   }, [baselineReports]);
   useEffect(() => {
     void load();
+    const onOutcomesChange = (event: Event) => {
+      if ((event as CustomEvent).detail?.source !== "outcome-tracker")
+        void load();
+    };
+    window.addEventListener("grader:outcomes-changed", onOutcomesChange);
+    return () =>
+      window.removeEventListener("grader:outcomes-changed", onOutcomesChange);
   }, [load]);
   const loadPlans = useCallback(async () => {
     try {
@@ -256,6 +263,11 @@ export default function OutcomeTracker({
       setDetailsOpen(false);
       await load();
       window.dispatchEvent(new Event("grader:outcome-plans-changed"));
+      window.dispatchEvent(
+        new CustomEvent("grader:outcomes-changed", {
+          detail: { source: "outcome-tracker" },
+        }),
+      );
       setMessage(
         "Business period saved privately. Your issued grade is unchanged.",
       );
@@ -374,6 +386,11 @@ export default function OutcomeTracker({
       }
       await load();
       window.dispatchEvent(new Event("grader:outcome-plans-changed"));
+      window.dispatchEvent(
+        new CustomEvent("grader:outcomes-changed", {
+          detail: { source: "outcome-tracker" },
+        }),
+      );
       setMessage(
         "Business period deleted. Minimal change history remains in your private account export.",
       );

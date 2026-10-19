@@ -13,6 +13,7 @@ import { exportOwnOutcomes } from "../../../../lib/server/outcome-store";
 import { leadRoutingStore } from "../../../../lib/server/lead-routing-store";
 import { exportOwnOutcomePlans } from "../../../../lib/server/outcome-plan-store";
 import { exportOwnOutcomeReminders } from "../../../../lib/server/outcome-reminder-store";
+import { exportOwnOutcomeImports } from "../../../../lib/server/outcome-import-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       requestedContactAccess,
       outcomePlans,
       outcomeReminders,
+      outcomeImports,
     ] = await Promise.all([
       exportAccount(user.id),
       researchStore().ownRequests(user.id),
@@ -39,6 +41,7 @@ export async function GET(request: Request) {
       leadRoutingStore().exportOwn(user.id),
       exportOwnOutcomePlans(user.id),
       exportOwnOutcomeReminders(user.id),
+      exportOwnOutcomeImports(user.id),
     ]);
     return Response.json(
       {
@@ -52,6 +55,7 @@ export async function GET(request: Request) {
         requestedContactAccess,
         outcomePlans,
         outcomeReminders,
+        outcomeImports,
       },
       {
         headers: {

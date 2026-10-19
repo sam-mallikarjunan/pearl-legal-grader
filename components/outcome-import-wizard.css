@@ -1,0 +1,125 @@
+.outcome-import-wizard {
+  min-width: 0;
+}
+.outcome-import-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 225px), 1fr));
+  gap: 16px;
+}
+.outcome-import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 20px 0;
+}
+.outcome-import-source,
+.outcome-import-mapping,
+.outcome-import-period {
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 10px;
+  padding: 20px;
+  margin: 20px 0;
+  min-width: 0;
+}
+.outcome-import-source > label {
+  margin-bottom: 18px;
+}
+.outcome-import-wizard textarea {
+  width: 100%;
+  max-width: 100%;
+  min-height: 145px;
+  border: 1px solid #c9d3c1;
+  border-radius: 6px;
+  padding: 12px;
+  font-family: ui-monospace, monospace;
+  font-size: 14px;
+  background: white;
+  color: #243a31;
+  resize: vertical;
+}
+.outcome-import-wizard .field-label {
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #294339;
+}
+.outcome-import-wizard .field-label select,
+.outcome-import-wizard .field-label input {
+  font-size: 1rem;
+  color: #294339;
+  min-height: 44px;
+}
+.outcome-import-wizard .btn {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+}
+.outcome-import-wizard select,
+.outcome-import-wizard input {
+  max-width: 100%;
+  min-width: 0;
+}
+.outcome-import-wizard input[type="file"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outcome-import-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 22px 0;
+  line-height: 1.55;
+}
+.outcome-import-choice input {
+  flex: 0 0 auto;
+  margin-top: 5px;
+}
+.outcome-import-errors {
+  padding: 16px;
+  border-left: 3px solid #956137;
+  background: #fff8ee;
+  margin: 18px 0;
+}
+.outcome-import-errors ul {
+  padding-left: 20px;
+}
+.outcome-import-errors li {
+  margin: 8px 0;
+}
+.outcome-import-period h5 {
+  font-size: 1rem;
+  line-height: 1.5;
+  margin: 0;
+}
+.outcome-import-period dt {
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.outcome-import-period dd {
+  font-weight: 600;
+  margin: 5px 0 0;
+}
+.outcome-import-period summary {
+  cursor: pointer;
+  margin-top: 16px;
+  font-weight: 600;
+}
+.outcome-import-wizard summary:focus-visible {
+  outline: 2px solid #435c33;
+  outline-offset: 4px;
+}
+@media (max-width: 540px) {
+  .outcome-import-source,
+  .outcome-import-mapping,
+  .outcome-import-period {
+    padding: 14px;
+  }
+  .outcome-import-actions .btn,
+  .outcome-import-wizard > .btn {
+    width: 100%;
+    white-space: normal;
+  }
+  .outcome-import-wizard textarea {
+    font-size: 16px;
+  }
+}

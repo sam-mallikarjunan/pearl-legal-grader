@@ -40,6 +40,9 @@ import NurtureEnrollment from "./NurtureEnrollment";
 import OutcomeTracker from "./OutcomeTracker";
 import OutcomePlans from "./OutcomePlans";
 import OutcomeReminders from "./OutcomeReminders";
+import OutcomeImportWizard from "./OutcomeImportWizard";
+import ProgressInsights from "./ProgressInsights";
+import PersonalizedActions from "./PersonalizedActions";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -1437,6 +1440,16 @@ export default function AccountPanel({
           <OutcomeTracker
             key={`outcomes-${user.id}`}
             baselineReports={reports}
+          />
+          <OutcomeImportWizard key={`outcome-imports-${user.id}`} />
+          <ProgressInsights
+            key={`progress-insights-${user.id}`}
+            reports={reports}
+          />
+          <PersonalizedActions
+            key={`personalized-actions-${user.id}`}
+            reports={reports}
+            onReportsChanged={() => loadPrivate()}
           />
           <OutcomePlans
             key={`outcome-plans-${user.id}`}
