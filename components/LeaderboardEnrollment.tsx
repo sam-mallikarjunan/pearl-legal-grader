@@ -183,6 +183,7 @@ export default function LeaderboardEnrollment({
               </label>
               <select
                 id="leaderboard-report"
+                style={{ width: "100%", minWidth: 0, maxWidth: "100%" }}
                 value={selected}
                 disabled={busy}
                 onChange={(event) => {
