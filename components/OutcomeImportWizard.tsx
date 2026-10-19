@@ -470,8 +470,10 @@ export default function OutcomeImportWizard() {
             All dates are UTC calendar days. Acquisition and funnel totals must
             use the same new-inquiry cohort. Billed and collected totals must
             use invoices issued in the period, collected only by that period’s
-            end. Administrative hours are your own, not the team’s combined
-            hours.
+            end. Use money totals for these invoice columns. Billed or collected
+            hours, total deposits and payments on older invoices do not match.
+            Use matching totals or leave those columns unmapped. Administrative
+            hours are your own, not the team’s combined hours.
           </p>
           <label className="outcome-import-choice">
             <input
