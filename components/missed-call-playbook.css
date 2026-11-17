@@ -1,0 +1,91 @@
+.missed-call-playbook {
+  background: var(--paper, #fff);
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 14px;
+  padding: clamp(14px, 3vw, 24px);
+  margin: 18px 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  scroll-margin-top: 20px;
+}
+.missed-call-step {
+  margin: 18px 0;
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.missed-call-step legend,
+.missed-call-step h4 {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.missed-call-step legend {
+  max-width: 100%;
+  padding: 0 4px;
+}
+.missed-call-step h4 {
+  margin-top: 0;
+}
+.missed-call-step ol {
+  padding-left: 20px;
+}
+.missed-call-step li + li {
+  margin-top: 8px;
+}
+.missed-call-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 235px), 1fr));
+  gap: 14px;
+}
+.missed-call-playbook label {
+  min-width: 0;
+}
+.missed-call-grid select,
+.missed-call-grid input {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-height: 44px;
+  font-size: 16px;
+}
+.missed-call-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 0;
+  min-height: 44px;
+}
+.missed-call-checkbox input {
+  flex: 0 0 auto;
+  margin: 4px 0 0;
+}
+.missed-call-playbook .btn {
+  white-space: normal;
+  max-width: 100%;
+  min-height: 44px;
+}
+.missed-call-playbook .button-row {
+  flex-wrap: wrap;
+}
+.missed-call-subpanel {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--border, #d9e3df);
+  border-radius: 8px;
+}
+.missed-call-subpanel summary {
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 700;
+}
+.missed-call-subpanel pre {
+  font-family: inherit;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.missed-call-result {
+  font-weight: 650;
+}

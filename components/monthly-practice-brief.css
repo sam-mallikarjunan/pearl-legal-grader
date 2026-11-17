@@ -1,0 +1,183 @@
+.monthly-practice-brief {
+  min-width: 0;
+  margin: 18px 0;
+  border: 1px solid var(--line, #d9e3df);
+  border-radius: 14px;
+  background: var(--paper, #fff);
+  padding: clamp(14px, 3vw, 24px);
+  scroll-margin-top: 20px;
+  overflow-wrap: anywhere;
+}
+.monthly-practice-brief > h3 {
+  margin: 3px 0 6px;
+}
+.monthly-practice-brief .practice-brief-open,
+.practice-brief-choices button {
+  margin-top: 12px;
+}
+.monthly-practice-brief .btn {
+  max-width: 100%;
+  white-space: normal;
+  min-height: 44px;
+}
+.practice-brief-controls,
+.practice-brief-links {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0;
+}
+.practice-brief-controls button,
+.practice-brief-links a {
+  min-height: 44px;
+}
+.practice-brief-links a {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+}
+.practice-brief-select {
+  display: grid;
+  margin: 12px 0 16px;
+  min-width: 0;
+}
+.practice-brief-select select {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 44px;
+  font-size: 16px;
+}
+.practice-brief-detail {
+  border: 1px solid var(--line, #d9e3df);
+  border-radius: 12px;
+  background: #fff;
+  padding: clamp(12px, 3vw, 18px);
+  margin-bottom: 12px;
+  min-width: 0;
+}
+.practice-brief-summary {
+  display: grid;
+  gap: 5px;
+}
+.practice-brief-summary h4 {
+  color: var(--ink, #193c36);
+  font-size: 1.2rem;
+  line-height: 1.28;
+}
+.practice-brief-metric {
+  color: var(--ink, #193c36);
+  font-weight: 600;
+}
+.practice-brief-periods,
+.practice-brief-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 10px;
+}
+.practice-brief-periods {
+  margin: 12px 0;
+}
+.practice-brief-period {
+  background: var(--soft, #f3f5ee);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+.practice-brief-period dt {
+  color: var(--ink, #193c36);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+.practice-brief-period dd {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  color: var(--text, #233d38);
+}
+.practice-brief-period strong {
+  color: var(--ink, #193c36);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+.practice-brief-dates {
+  font-size: 0.87rem;
+}
+.practice-brief-delta {
+  color: var(--ink, #193c36);
+  font-weight: 700;
+}
+.practice-brief-caveat,
+.practice-brief-history,
+.practice-brief-notice {
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 10px 12px;
+}
+.practice-brief-caveat {
+  background: var(--warm, #f5e9d8);
+}
+.practice-brief-caveat p,
+.practice-brief-history,
+.practice-brief-notice {
+  color: var(--text, #233d38);
+}
+.practice-brief-history,
+.practice-brief-notice {
+  background: var(--soft, #f3f5ee);
+}
+.practice-brief-definition {
+  margin: 12px 0;
+}
+.practice-brief-definition summary {
+  cursor: pointer;
+  line-height: 1.4;
+  padding: 10px 0;
+  font-weight: 600;
+}
+.practice-brief-choices {
+  border: 1px solid var(--line, #d9e3df);
+  border-radius: 10px;
+  padding: 12px;
+  min-width: 0;
+  margin: 16px 0 0;
+}
+.practice-brief-choices legend {
+  color: var(--ink, #193c36);
+  padding: 0 5px;
+  font-weight: 700;
+}
+.practice-brief-option {
+  display: flex;
+  align-items: flex-start;
+  min-width: 0;
+  min-height: 44px;
+  cursor: pointer;
+  gap: 9px;
+  border: 1px solid var(--line, #d9e3df);
+  border-radius: 8px;
+  padding: 8px;
+}
+.practice-brief-option:has(:checked) {
+  border-color: var(--green, #277a62);
+  background: var(--soft, #f3f5ee);
+}
+.practice-brief-option input {
+  flex: 0 0 auto;
+  margin: 5px 0 0;
+}
+.practice-brief-option > span {
+  display: grid;
+  gap: 2px;
+}
+.practice-brief-option > span > span {
+  font-size: 0.9rem;
+}
+.practice-brief-choices .fine-print {
+  margin-top: 10px;
+}
+.monthly-practice-brief :is(select, button, a, summary, input):focus-visible {
+  outline: 2px solid var(--green, #277a62);
+  outline-offset: 3px;
+}

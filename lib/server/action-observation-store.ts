@@ -124,6 +124,36 @@ function period(v: unknown, now: Date): OutcomePeriod {
     updatedAt,
   };
 }
+export function decodeActionObservationContext(v: unknown, now = new Date()) {
+  try {
+    if (
+      !accountRecord(v) ||
+      !Array.isArray(v.observations) ||
+      v.observations.length > ACTION_OBSERVATION_LIMIT ||
+      !Array.isArray(v.plans) ||
+      v.plans.length > 36 ||
+      !Array.isArray(v.baselines) ||
+      v.baselines.length > 24 ||
+      !Array.isArray(v.followups) ||
+      v.followups.length > 24
+    )
+      throw new ActionObservationStorageError();
+    const observations = v.observations.map(decodeActionObservation),
+      plans = v.plans.map(decodeOutcomePlan),
+      baselines = v.baselines.map((v) => period(v, now)),
+      followups = v.followups.map((v) => period(v, now));
+    for (const rows of [observations, plans, baselines, followups])
+      if (new Set(rows.map((r) => r.id)).size !== rows.length)
+        throw new ActionObservationStorageError();
+    if (
+      new Set(observations.map((o) => o.requestId)).size !== observations.length
+    )
+      throw new ActionObservationStorageError();
+    return { observations, plans, baselines, followups };
+  } catch {
+    throw new ActionObservationStorageError();
+  }
+}
 export function createActionObservationStore(d: {
   rpc: typeof accountRpc;
   readReport: typeof readAccountReport;
@@ -160,35 +190,7 @@ export function createActionObservationStore(d: {
     const v = await rpc("grader_read_action_observations", {
       p_user_id: userId,
     });
-    try {
-      if (
-        !accountRecord(v) ||
-        !Array.isArray(v.observations) ||
-        v.observations.length > ACTION_OBSERVATION_LIMIT ||
-        !Array.isArray(v.plans) ||
-        v.plans.length > 36 ||
-        !Array.isArray(v.baselines) ||
-        v.baselines.length > 24 ||
-        !Array.isArray(v.followups) ||
-        v.followups.length > 24
-      )
-        throw new ActionObservationStorageError();
-      const observations = v.observations.map(decodeActionObservation),
-        plans = v.plans.map(decodeOutcomePlan),
-        baselines = v.baselines.map((v) => period(v, d.now?.() ?? new Date())),
-        followups = v.followups.map((v) => period(v, d.now?.() ?? new Date()));
-      for (const rows of [observations, plans, baselines, followups])
-        if (new Set(rows.map((r) => r.id)).size !== rows.length)
-          throw new ActionObservationStorageError();
-      if (
-        new Set(observations.map((o) => o.requestId)).size !==
-        observations.length
-      )
-        throw new ActionObservationStorageError();
-      return { observations, plans, baselines, followups };
-    } catch {
-      throw new ActionObservationStorageError();
-    }
+    return decodeActionObservationContext(v, d.now?.() ?? new Date());
   };
   const read = async (userId: string) => {
     const v = await readRaw(userId);

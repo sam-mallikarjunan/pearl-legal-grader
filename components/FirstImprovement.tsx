@@ -513,6 +513,17 @@ export default function FirstImprovement({
         Choose one action from your report, a number you already measure and a
         month to follow up.
       </p>
+      <p className="fine-print">
+        Working on intake?{" "}
+        <a className="text-link" href="#missed-call-playbook">
+          Try the missed-call follow-up playbook
+        </a>
+        . When your planned month closes, use the{" "}
+        <a className="text-link" href="#monthly-practice-brief">
+          Monthly Practice Brief
+        </a>{" "}
+        to decide what to do next.
+      </p>
       {!open ? (
         <button
           type="button"
@@ -576,6 +587,19 @@ export default function FirstImprovement({
               )}
               <p>{labels[tracked.status]}</p>
               <div className="button-row">
+                <a
+                  className="text-link"
+                  href="#monthly-practice-brief"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent("grader:monthly-brief-open", {
+                        detail: { observationId: tracked.observation.id },
+                      }),
+                    )
+                  }
+                >
+                  Open this action’s Monthly Practice Brief
+                </a>
                 <a className="text-link" href="#action-outcome-tracking">
                   Open action tracking
                 </a>

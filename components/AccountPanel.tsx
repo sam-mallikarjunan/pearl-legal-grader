@@ -47,6 +47,8 @@ import DataIntegrations from "./DataIntegrations";
 import ActionObservations from "./ActionObservations";
 import FirstImprovement from "./FirstImprovement";
 import PilotParticipation from "./PilotParticipation";
+import MonthlyPracticeBrief from "./MonthlyPracticeBrief";
+import MissedCallPlaybook from "./MissedCallPlaybook";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -1118,6 +1120,11 @@ export default function AccountPanel({
             <>
               <FirstImprovement
                 key={`first-improvement-${user.id}`}
+                reports={reports}
+              />
+              <MonthlyPracticeBrief key={`monthly-brief-${user.id}`} />
+              <MissedCallPlaybook
+                key={`missed-call-playbook-${user.id}`}
                 reports={reports}
               />
               <PilotParticipation key={`pilot-participation-${user.id}`} />

@@ -17,6 +17,7 @@ import { exportOwnOutcomeImports } from "../../../../lib/server/outcome-import-s
 import { exportOwnDataIntegrations } from "../../../../lib/server/data-integration-store";
 import { exportOwnActionObservations } from "../../../../lib/server/action-observation-store";
 import { exportOwnPilotParticipation } from "../../../../lib/server/pilot-store";
+import { exportOwnMonthlyBriefDecisions } from "../../../../lib/server/monthly-practice-brief-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
       dataIntegrations,
       actionObservations,
       pilotParticipation,
+      monthlyPracticeBrief,
     ] = await Promise.all([
       exportAccount(user.id),
       researchStore().ownRequests(user.id),
@@ -51,6 +53,7 @@ export async function GET(request: Request) {
       exportOwnDataIntegrations(user.id),
       exportOwnActionObservations(user.id),
       exportOwnPilotParticipation(user.id),
+      exportOwnMonthlyBriefDecisions(user.id),
     ]);
     return Response.json(
       {
@@ -68,6 +71,7 @@ export async function GET(request: Request) {
         dataIntegrations,
         actionObservations,
         pilotParticipation,
+        monthlyPracticeBrief,
       },
       {
         headers: {
