@@ -45,6 +45,8 @@ import ProgressInsights from "./ProgressInsights";
 import PersonalizedActions from "./PersonalizedActions";
 import DataIntegrations from "./DataIntegrations";
 import ActionObservations from "./ActionObservations";
+import FirstImprovement from "./FirstImprovement";
+import PilotParticipation from "./PilotParticipation";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -449,6 +451,10 @@ export default function AccountPanel({
   const id = useId();
   const [session, setSession] = useState<AccountSession | null>(null);
   const [reports, setReports] = useState<CloudReport[]>([]);
+  const [guidedSave, setGuidedSave] = useState<{
+    localReportId: string;
+    accountReportId: string;
+  } | null>(null);
   const [preferences, setPreferences] = useState<AccountPreferences | null>(
     null,
   );
@@ -476,6 +482,7 @@ export default function AccountPanel({
   const pendingHelpRequests = useRef<Record<string, string>>({});
 
   function clearPrivateRequestState() {
+    setGuidedSave(null);
     setReportEmails({});
     pendingEmailRequests.current = {};
     setHelpRequests(null);
@@ -631,6 +638,10 @@ export default function AccountPanel({
       });
       const saved = cloudReportFrom(result.report);
       await loadPrivate(false);
+      setGuidedSave({
+        localReportId: selectedReport.id,
+        accountReportId: saved.id,
+      });
       setMessage(
         `${result.created === false ? "This report is already saved" : "Your selected report is saved"} in your private account.${ownerOnly ? " This new copy contains your reported assessment without website evidence; the original local report is unchanged." : ""}`,
       );
@@ -1076,6 +1087,20 @@ export default function AccountPanel({
                     <Save size={16} />
                     Save selected report
                   </button>
+                  {reports.some(
+                    (saved) =>
+                      saved.snapshot.id === selectedReport.id ||
+                      (guidedSave?.localReportId === selectedReport.id &&
+                        guidedSave.accountReportId === saved.id),
+                  ) && (
+                    <a
+                      className="btn btn-secondary"
+                      href="/account#first-improvement"
+                    >
+                      Continue to the first improvement guide{" "}
+                      <ArrowRight size={16} />
+                    </a>
+                  )}
                   {errorCode === "website_evidence_unverified" && (
                     <button
                       className="btn btn-secondary"
@@ -1088,6 +1113,15 @@ export default function AccountPanel({
                 </div>
               )}
             </section>
+          )}
+          {!onImport && (
+            <>
+              <FirstImprovement
+                key={`first-improvement-${user.id}`}
+                reports={reports}
+              />
+              <PilotParticipation key={`pilot-participation-${user.id}`} />
+            </>
           )}
           <section aria-label="Saved account reports">
             <h3>

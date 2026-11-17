@@ -3820,3 +3820,25 @@ svg {
     display: none;
   }
 }
+.improvement-report-entry {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block: 1.5rem;
+}
+.improvement-report-entry > div {
+  flex: 1 1 22rem;
+  min-width: 0;
+}
+.improvement-report-entry > .btn {
+  max-width: 100%;
+  white-space: normal;
+  text-align: left;
+}
+@media print {
+  .improvement-report-entry {
+    display: none;
+  }
+}

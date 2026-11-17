@@ -3,10 +3,17 @@ import {
   parseOutcomeImportInput,
   OUTCOME_IMPORT_CONFIRMATION,
 } from "./outcome-batch-import";
-import { parseOutcomePeriodInput, type OutcomePeriodInput } from "./outcomes";
+import {
+  outcomePeriodsOverlap,
+  parseOutcomePeriodInput,
+  type OutcomePeriodInput,
+} from "./outcomes";
+import type { OutcomePlan } from "./outcome-plans";
 
 export const CREATE_DATA_CONNECTION_CONFIRMATION =
   "CREATE AGGREGATE CONNECTION";
+export const REPORT_DATA_DELIVERY_CONFIRMATION =
+  "APPLY REVIEWED TOTALS TO PLAN";
 export const DATA_INTEGRATION_LIMITS = {
   activeConnections: 3,
   retainedConnections: 24,
@@ -39,6 +46,7 @@ export interface DataDeliverySummary {
   status: DataDeliveryStatus;
   periodCount: number;
   importBatchId: string | null;
+  reportingPlanId?: string;
 }
 export interface DataDelivery extends DataDeliverySummary {
   periods: OutcomePeriodInput[] | null;
@@ -116,6 +124,61 @@ export function parseDataIntegrationRevision(
     );
   return value.revision;
 }
+export function parseDataPlanDelivery(value: unknown) {
+  if (
+    !accountRecord(value) ||
+    Object.keys(value).length !== 4 ||
+    value.confirm !== REPORT_DATA_DELIVERY_CONFIRMATION ||
+    !accountUuid(value.planId) ||
+    !revision(value.revision) ||
+    value.revision >= 1_000_000 ||
+    !revision(value.planRevision) ||
+    value.planRevision >= 1_000_000
+  )
+    throw new DataIntegrationError(
+      "invalid_plan_delivery_review",
+      "Review the exact month and confirm the current delivery and plan.",
+    );
+  return {
+    revision: value.revision,
+    planId: value.planId.toLowerCase(),
+    planRevision: value.planRevision,
+  };
+}
+
+/** Advisory UI preview. The server locks and checks both records again on apply. */
+export function deliveryPlanOption(
+  periods: OutcomePeriodInput[],
+  plans: OutcomePlan[],
+  now = new Date(),
+):
+  | { kind: "ordinary" | "separate" | "already-reported" | "mismatch" }
+  | { kind: "match"; plan: OutcomePlan } {
+  const overlaps = plans.filter(
+    (plan) =>
+      plan.status !== "withdrawn" &&
+      periods.some((period) => outcomePeriodsOverlap(period, plan)),
+  );
+  if (!overlaps.length) return { kind: "ordinary" };
+  if (periods.length !== 1) return { kind: "separate" };
+  const [period] = periods;
+  const [plan] = overlaps;
+  if (
+    overlaps.length !== 1 ||
+    period.startDate !== plan.startDate ||
+    period.endDate !== plan.endDate ||
+    period.source !== "export" ||
+    period.source !== plan.source ||
+    period.currency !== plan.currency ||
+    plan.endDate >= now.toISOString().slice(0, 10)
+  )
+    return { kind: "mismatch" };
+  if (plan.status === "reported" || plan.outcomeId)
+    return { kind: "already-reported" };
+  if (!plan.baselineReportId || plan.revision >= 1_000_000)
+    return { kind: "mismatch" };
+  return { kind: "match", plan };
+}
 export function dataIntegrationBearer(value: string | null): string {
   const found = /^Bearer (plg_in_[A-Za-z0-9_-]{43})$/.exec(value || "");
   if (!found)
@@ -165,7 +228,11 @@ export function decodeDataDeliverySummary(value: unknown): DataDeliverySummary {
     Number(value.periodCount) > 24 ||
     !(value.importBatchId === null || accountUuid(value.importBatchId)) ||
     (value.status === "imported" && value.importBatchId === null) ||
-    (value.status !== "imported" && value.importBatchId !== null)
+    (value.status !== "imported" && value.importBatchId !== null) ||
+    (value.reportingPlanId !== undefined &&
+      (!accountUuid(value.reportingPlanId) ||
+        value.status !== "imported" ||
+        value.periodCount !== 1))
   )
     throw unavailable();
   return {
@@ -177,6 +244,9 @@ export function decodeDataDeliverySummary(value: unknown): DataDeliverySummary {
     status: value.status as DataDeliveryStatus,
     periodCount: Number(value.periodCount),
     importBatchId: value.importBatchId as string | null,
+    ...(typeof value.reportingPlanId === "string"
+      ? { reportingPlanId: value.reportingPlanId }
+      : {}),
   };
 }
 export function decodeDataDelivery(value: unknown): DataDelivery {

@@ -1,0 +1,78 @@
+.pilot-participation {
+  border-top: 1px solid #dce3e2;
+  margin: 1.75rem 0;
+  padding: 1.25rem 0 0;
+  scroll-margin-top: 1rem;
+  min-width: 0;
+}
+
+.pilot-participation .pilot-inputs,
+.pilot-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.pilot-inputs label {
+  display: grid;
+  align-content: start;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.pilot-inputs select {
+  width: 100%;
+  min-width: 0;
+}
+
+.pilot-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.pilot-actions .pilot-check {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: start;
+  gap: 0.5rem;
+  flex-basis: 100%;
+  cursor: pointer;
+}
+
+.pilot-check input {
+  margin-top: 0.25rem;
+}
+
+.pilot-leave {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border: 1px solid #dce3e2;
+  border-radius: 0.5rem;
+}
+
+.pilot-summary-grid div {
+  min-width: 0;
+  border-top: 1px solid #dce3e2;
+  padding-top: 0.6rem;
+}
+
+.pilot-summary-grid dt {
+  font-weight: 700;
+}
+
+.pilot-summary-grid dd {
+  font-size: 1.25rem;
+  font-weight: 650;
+  margin: 0.3rem 0 0;
+}
+
+.pilot-summary-grid p {
+  font-size: 0.85rem;
+}
+
+.pilot-primary-metric strong {
+  font-size: 1.35rem;
+}

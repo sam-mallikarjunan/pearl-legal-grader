@@ -109,7 +109,10 @@ export default function AdminInsights() {
             separate from the practice grade.
           </p>
         </div>
-        <a href="/admin">Methodology administration</a>
+        <div className="pa-buttons">
+          <a href="/admin">Methodology administration</a>
+          <a href="/admin/pilot">First improvement pilot</a>
+        </div>
       </header>
       {access === "loading" && (
         <p role="status">Checking administrator access…</p>

@@ -1711,6 +1711,24 @@ export default function GraderApp({
             </div>
           )}
         </div>
+        {!current.isSample && report.actions.length > 0 && (
+          <aside className="guide-note improvement-report-entry">
+            <div>
+              <span className="eyebrow">PICK ONE THING TO IMPROVE</span>
+              <h3>Turn a recommendation into a follow-up plan</h3>
+              <p>
+                Save this assessment privately, choose one action, and decide
+                what to measure after a future month closes.
+              </p>
+            </div>
+            <button
+              className="btn btn-primary"
+              onClick={() => setModal("email")}
+            >
+              Save and plan a follow-up <ArrowRight size={16} />
+            </button>
+          </aside>
+        )}
         <div className="section-heading">
           <div>
             <span className="eyebrow">THE PICTURE SO FAR</span>

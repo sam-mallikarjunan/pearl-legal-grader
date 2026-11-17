@@ -26,6 +26,7 @@ pnpm dev
 7. Administrators can preview, publish and roll back shared questionnaire versions. Issued reports retain their original rules. Separate research, recognition, marketing and requested-help choices default to off.
 8. Optionally create a narrow automation delivery key, receive aggregate totals from an external script or automation, then review and explicitly import them. Receiving totals never imports them automatically.
 9. Explore practice-specific participant comparisons when sufficient comparable evidence exists, or register a private action observation against a future reporting plan. Missing evidence stays withheld; neither feature proves an action caused a result.
+10. Start with one recommendation in the private workspace: choose an issued action, a compatible closed baseline and a future month to measure. Use the separate pilot opt-in only if you want to contribute participation milestones and feedback.
 
 **Juniper Family Law** is an explicitly fictional solo-practice example. Its reserved `.example` URL is never scanned, and its answers are not attached to a user's real website.
 
@@ -132,6 +133,8 @@ Preview allowances are 3 active keys and 24 retained key records per account, 30
 
 Advanced setup links to official instructions for [Make HTTP v4](https://apps.make.com/http) API-key keychains (header `Authorization`, value with the `Bearer ` prefix), [n8n HTTP credentials](https://docs.n8n.io/integrations/builtin/credentials/httprequest) (raw key in a Bearer credential), and [API by Zapier](https://help.zapier.com/hc/en-us/articles/44391660158733-How-to-get-started-with-API-by-Zapier) (Static Headers connection restricted to the grader's hostname). Leave Zapier's optional Test URL blank for this POST-only interface. External services may need their own paid plan or source permissions. This feature creates no external account, authorizes no OAuth provider, and enables no research, marketing, email, contact or HubSpot integration.
 
+A reviewed delivery for a single closed month can report against an unreported plan in the same account when dates, source and currency match exactly. The owner confirms the plan and numbers at their current revisions. The save uses the original plan's baseline and records the completed delivery once. It never overwrites an already reported month. Existing ordinary imports still reject reserved plan windows. For a batch containing a planned month, send that one month by itself under a new request UUID; the original batch stays pending until the owner discards it or it expires.
+
 ## Private progress and next actions
 
 The account progress view compares chosen reporting periods with visible dates, period lengths, gaps, source, currency and exact numerators/denominators. Full calendar months are compared with full calendar months; rolling windows require matching lengths. Different currencies, sources and unresolved practice scopes withhold change calculations. Rates use percentage-point changes, acquisition costs stay within the inquiry cohort and collection measures stay within their invoice cohort. Missing measures and zero denominators produce no invented rate. Unlinked periods are explicitly owner-declared records, not verified practice matches.
@@ -151,6 +154,12 @@ The comparison is private and descriptive: visible dates, counts, denominators a
 ## Optional reporting reminders
 
 Reporting reminders require their own current, specific opt-in. Existing action-reminder, marketing, course and research choices never enroll an owner. A registered plan can receive one reminder after its period closes and one follow-up seven days later while it remains unreported. Completed or withdrawn plans stop future reminders. Messages contain a private workspace link and reporting dates, with no business totals, answers, scores or offers.
+
+## First Improvement pilot
+
+The guided workspace brings together the existing issued action, private outcome baseline and prospective reporting plan. Creating or reusing a matching plan and registering a specific observation requires explicit owner review. A partially saved plan stays available on retry, while the selected measure and dates on an existing observation stay fixed.
+
+Pilot participants opt in separately while signed in and can leave. The private operator view shows bounded counts and explicit usefulness or blocker choices. It does not expose participant identity, source values or assessment answers. Distinguish a planned month from a closed eligible follow-up, and a requested Pearl conversation from a qualified or paying customer. See the [pilot operator guide](docs/PILOT_RUNBOOK.md) for enrollment and review gates.
 
 `REPORTING_REMINDERS_ENABLED=true` permits production sending through the existing verified Resend sender. Preview deployments never send. The daily `/api/cron/outcome-reminders` uses the existing cron credential, reserves at most ten jobs per batch and caps new messages at 20/day and 100/month. An explicitly requested, labeled sample is limited separately to one/account/day and three/account/month and uses the same delivery pipeline. Frozen payloads and stable provider idempotency keys bound retries to four attempts within one hour. Dispatch rechecks current permission, plan status, verified recipient, suppression and operator pause. Signed provider webhooks distinguish acceptance from delivery.
 

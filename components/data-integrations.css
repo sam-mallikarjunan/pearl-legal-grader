@@ -106,6 +106,16 @@
   margin: 24px 0;
   padding-top: 6px;
 }
+.data-integrations-plan {
+  border-left: 3px solid #435c33;
+  background: #f5f8f2;
+  padding: 14px;
+  margin: 18px 0;
+}
+.data-integrations-plan h5 {
+  font-size: 1rem;
+  margin: 0 0 10px;
+}
 .data-integrations-message {
   padding: 14px;
   border-left: 3px solid #435c33;

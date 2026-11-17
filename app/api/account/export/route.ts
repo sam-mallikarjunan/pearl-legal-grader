@@ -16,6 +16,7 @@ import { exportOwnOutcomeReminders } from "../../../../lib/server/outcome-remind
 import { exportOwnOutcomeImports } from "../../../../lib/server/outcome-import-store";
 import { exportOwnDataIntegrations } from "../../../../lib/server/data-integration-store";
 import { exportOwnActionObservations } from "../../../../lib/server/action-observation-store";
+import { exportOwnPilotParticipation } from "../../../../lib/server/pilot-store";
 export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
@@ -34,6 +35,7 @@ export async function GET(request: Request) {
       outcomeImports,
       dataIntegrations,
       actionObservations,
+      pilotParticipation,
     ] = await Promise.all([
       exportAccount(user.id),
       researchStore().ownRequests(user.id),
@@ -48,6 +50,7 @@ export async function GET(request: Request) {
       exportOwnOutcomeImports(user.id),
       exportOwnDataIntegrations(user.id),
       exportOwnActionObservations(user.id),
+      exportOwnPilotParticipation(user.id),
     ]);
     return Response.json(
       {
@@ -64,6 +67,7 @@ export async function GET(request: Request) {
         outcomeImports,
         dataIntegrations,
         actionObservations,
+        pilotParticipation,
       },
       {
         headers: {

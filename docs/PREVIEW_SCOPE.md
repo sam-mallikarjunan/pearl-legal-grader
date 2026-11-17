@@ -90,6 +90,10 @@ Personalized next actions reorder the explicitly selected report's issued templa
 
 Optional future monthly plans register the baseline, reporting dates, source and currency before the period starts. Those fields stay locked; later numeric corrections do not permit changing the original comparison. Deleting the baseline invalidates that plan's evidence. A withdrawn plan or a deleted linked period never restarts automatically. Registration and reminders grant no research permission.
 
+The First Improvement guide takes an owned current issued assessment to one action, one closed baseline and one future reporting month. An owner can resume a compatible saved plan if the registration is interrupted. The guide requires explicit review before saving and does not change the action's completion status, score or permissions.
+
+An owner can explicitly use a reviewed single-period automation delivery to report a closed plan with the same dates, source and currency at the reviewed revisions. The existing plan and its frozen baseline dictate the saved lineage. This option does not overwrite periods, rewrite a plan or process other rows. A multi-period delivery cannot be partly applied; the sender can use a new delivery for that month alone. The ordinary import and overlap rules stay in place.
+
 Private action observations can prospectively register an action actually issued in the selected plan's owned canonical assessment, a known closed baseline period and one fixed measure. The plan must cover a future full calendar month; registration precedes the change date, which is no later than the month begins. Source and currency must match, with a known numerator and positive denominator. Unlinked baseline scope needs a separate default-off declaration and is never written back as a period link. The action, measure, selected baseline observation/revision, context and future window are fixed. Up to 72 retained observations per account and 3 registrations per plan are allowed, without registering the same action twice in a plan.
 
 The sole possible follow-up is the outcome reported against that exact plan. The result remains waiting until the future period genuinely closes and suitable figures exist. Missing, revised or deleted baselines, withdrawn plans and unknown/incompatible follow-ups withhold comparison; frozen historical values are labeled rather than silently compared against revised data. Follow-up corrections retain visible revision/date context. Enum-only implementation and other-change check-ins are owner claims, use revision checks and never mark the source action complete or alter a grade. Withdrawal is explicit and terminal; concurrent registrations are disclosed conservatively.
@@ -132,9 +136,13 @@ No credentials, client identities, privileged matter details, payment informatio
 
 Every example selection is fictional. It is not an industry benchmark, a verified practice outcome or a live scan. Its example never writes an actual `.example` scan job.
 
+## Private pilot
+
+The First Improvement pilot has its own voluntary enrollment and an aggregate-only operator view. The cohort tag identifies the shared enrollment path, not the participant's identity or an authenticated invitation. Participation does not enable email, research, publication or Pearl contact. Pilot measurements distinguish saved records, owner feedback and eligible elapsed follow-ups. They are for improving the experience, not for publishing benchmarks or inferring that an action caused a result.
+
 ## Deferred capabilities
 
-Named public profiles and legal-quality rankings, ML-adjusted production grades, continuous monitoring, document uploads, native Clio/Google OAuth connections, teammate invitations, general marketing campaigns and CRM synchronization remain deferred. The direct automation totals interface is separate from named-provider connectivity; a documented recipe is not a proven third-party setup. The anonymous opt-in leaderboard and separately enrolled four-part educational series are implemented with the disclosed limits. Preferences alone never send a message, create a CRM record or publish a profile. AI stays off until a key is securely configured and the provider is tested.
+Named public profiles and legal-quality rankings, ML-adjusted production grades, continuous monitoring, document uploads, native Clio/Google OAuth connections, teammate invitations, general marketing campaigns and CRM synchronization remain deferred. The direct automation totals interface is separate from named-provider connectivity; a documented recipe does not verify a third-party setup. The anonymous opt-in leaderboard and separately enrolled four-part educational series are implemented with the disclosed limits. Preferences alone never send a message, create a CRM record or publish a profile. The optional AI website explanation requires an enabled and tested server configuration for the deployment.
 
 ## Review checklist
 

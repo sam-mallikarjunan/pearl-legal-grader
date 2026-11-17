@@ -4,14 +4,20 @@ import { createHash } from "node:crypto";
 import { createDataIntegrationStore } from "./data-integration-store";
 import {
   CREATE_DATA_CONNECTION_CONFIRMATION,
+  REPORT_DATA_DELIVERY_CONFIRMATION,
   DataIntegrationError,
   dataIntegrationBearer,
   decodeDataDelivery,
+  deliveryPlanOption,
   parseDataDeliveryInput,
+  parseDataPlanDelivery,
 } from "../data-integrations";
+import type { OutcomePlan } from "../outcome-plans";
+import { parseOutcomePeriodInput } from "../outcomes";
 import { POST as ingress } from "../../app/api/integrations/outcomes/route";
 import { POST as createConnection } from "../../app/api/account/data-connections/route";
 import { POST as acceptDelivery } from "../../app/api/account/data-deliveries/[id]/import/route";
+import { POST as reportDelivery } from "../../app/api/account/data-deliveries/[id]/report-plan/route";
 const owner = "11111111-1111-4111-8111-111111111111",
   id = "22222222-2222-4222-8222-222222222222",
   connectionId = "33333333-3333-4333-8333-333333333333",
@@ -299,4 +305,198 @@ test("all owner mutations reject cross-origin before account or storage; token i
   const missing = await ingress(make("/api/integrations/outcomes"));
   assert.equal(missing.status, 401);
   assert.match(missing.headers.get("cache-control") || "", /no-store/);
+});
+
+const planId = "aaaabbbb-3333-4444-8888-555566667777";
+const bridgeInput = {
+  revision: 0,
+  planId,
+  planRevision: 3,
+  confirm: REPORT_DATA_DELIVERY_CONFIRMATION,
+};
+const bridgeResult = {
+  delivery: {
+    ...summary,
+    status: "imported",
+    revision: 1,
+    reportingPlanId: planId,
+    importBatchId: batchId,
+    periods: null,
+  },
+  result: {
+    batchId,
+    periodIds: [owner],
+    created: true,
+    replayed: false,
+    activePeriodCount: 1,
+  },
+};
+
+test("explicit plan delivery confirmation accepts only both revisions and a plan ID; the RPC receives no proposed totals or baseline", async () => {
+  const calls: unknown[] = [];
+  const store = createDataIntegrationStore({
+    rpc: async (name, args) => {
+      calls.push({ name, args });
+      return bridgeResult;
+    },
+  });
+  for (const bad of [
+    { ...bridgeInput, confirm: "IMPORT REVIEWED TOTALS" },
+    { ...bridgeInput, revision: 1_000_000 },
+    { ...bridgeInput, planRevision: "3" },
+    { ...bridgeInput, planId: "wrong" },
+    { ...bridgeInput, values: period },
+    { ...bridgeInput, ownerId: owner },
+  ])
+    await assert.rejects(() => store.reportPlan(owner, id, bad), {
+      code: "invalid_plan_delivery_review",
+    });
+  assert.equal(calls.length, 0);
+  assert.equal(
+    parseDataPlanDelivery({ ...bridgeInput, planId: planId.toUpperCase() })
+      .planId,
+    planId,
+  );
+  const result = await store.reportPlan(owner, id, bridgeInput);
+  assert.deepEqual(calls, [
+    {
+      name: "grader_apply_delivery_to_plan",
+      args: {
+        p_user_id: owner,
+        p_delivery_id: id,
+        p_delivery_revision: 0,
+        p_plan_id: planId,
+        p_plan_revision: 3,
+      },
+    },
+  ]);
+  assert.equal(result.delivery.reportingPlanId, planId);
+  assert.equal(result.delivery.periods, null);
+  assert.equal(result.result.created, true);
+});
+
+test("planned receipt replay permits deletion without recreating a period and fails closed on inconsistent receipt", async () => {
+  const replay = {
+    ...bridgeResult,
+    result: {
+      ...bridgeResult.result,
+      created: false,
+      replayed: true,
+      activePeriodCount: 0,
+    },
+  };
+  const store = createDataIntegrationStore({ rpc: async () => replay });
+  assert.equal(
+    (await store.reportPlan(owner, id, bridgeInput)).result.activePeriodCount,
+    0,
+  );
+  for (const value of [
+    { ...replay, delivery: { ...replay.delivery, reportingPlanId: id } },
+    { ...replay, delivery: { ...replay.delivery, revision: 2 } },
+    { ...replay, result: { ...replay.result, periodIds: [owner, id] } },
+  ]) {
+    const malformed = createDataIntegrationStore({ rpc: async () => value });
+    await assert.rejects(() => malformed.reportPlan(owner, id, bridgeInput), {
+      code: "data_integration_unavailable",
+    });
+  }
+  for (const code of [
+    "data_plan_mismatch",
+    "data_plan_not_pending",
+    "data_plan_single_period",
+    "data_plan_delivery_used",
+    "data_revision_conflict",
+  ]) {
+    const denied = createDataIntegrationStore({
+      rpc: async () => ({ error: code, raw: "PRIVATE" }),
+    });
+    await assert.rejects(
+      () => denied.reportPlan(owner, id, bridgeInput),
+      (error) =>
+        error instanceof DataIntegrationError &&
+        error.code === code &&
+        error.status === 409 &&
+        !error.message.includes("PRIVATE"),
+    );
+  }
+});
+
+test("delivery review offers a plan only for the single matching closed export period", () => {
+  const row = parseOutcomePeriodInput(period, now);
+  const plan: OutcomePlan = {
+    id: planId,
+    revision: 3,
+    requestId: id,
+    startDate: row.startDate,
+    endDate: row.endDate,
+    source: "export",
+    currency: "USD",
+    baselineReportId: batchId,
+    baselineReleaseId: "preview-r1",
+    baselineStage: "established",
+    baselineFeeModel: "flat",
+    status: "registered",
+    outcomeId: null,
+    createdAt: "2026-08-01T00:00:00Z",
+    updatedAt: "2026-08-01T00:00:00Z",
+    reportedAt: null,
+    withdrawnAt: null,
+  };
+  assert.deepEqual(deliveryPlanOption([row], [plan], now), {
+    kind: "match",
+    plan,
+  });
+  assert.equal(deliveryPlanOption([row, row], [plan], now).kind, "separate");
+  assert.equal(
+    deliveryPlanOption([row], [{ ...plan, currency: "CAD" }], now).kind,
+    "mismatch",
+  );
+  assert.equal(
+    deliveryPlanOption([row], [{ ...plan, source: "self_reported" }], now).kind,
+    "mismatch",
+  );
+  assert.equal(
+    deliveryPlanOption([row], [{ ...plan, startDate: "2026-09-02" }], now).kind,
+    "mismatch",
+  );
+  assert.equal(
+    deliveryPlanOption([row], [plan], new Date("2026-09-30T23:59:00Z")).kind,
+    "mismatch",
+  );
+  assert.equal(
+    deliveryPlanOption(
+      [row],
+      [{ ...plan, status: "reported", outcomeId: owner }],
+      now,
+    ).kind,
+    "already-reported",
+  );
+  assert.equal(
+    deliveryPlanOption([row], [{ ...plan, status: "withdrawn" }], now).kind,
+    "ordinary",
+  );
+});
+
+test("report-plan HTTP rejects cross-origin and unauthenticated calls including the delivery key", async () => {
+  const path =
+    "https://grader.example/api/account/data-deliveries/" + id + "/report-plan";
+  const make = (origin: string) =>
+    new Request(path, {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        authorization: "Bearer plg_in_" + "a".repeat(43),
+      },
+      body: JSON.stringify(bridgeInput),
+    });
+  const context = { params: Promise.resolve({ id }) };
+  assert.equal(
+    (await reportDelivery(make("https://elsewhere.example"), context)).status,
+    403,
+  );
+  const same = await reportDelivery(make("https://grader.example"), context);
+  // With no configured local auth this is a 503; route does not accept the bearer.
+  assert.ok([401, 503].includes(same.status));
+  assert.match(same.headers.get("cache-control") ?? "", /no-store/);
 });

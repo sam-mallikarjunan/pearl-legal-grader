@@ -18,7 +18,7 @@
     "ai": "7.0.142",
     "cheerio": "1.2.0",
     "lucide-react": "1.57.0",
-    "next": "16.4.1",
+    "next": "16.4.5",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "workflow": "5.2.2"

@@ -3,11 +3,14 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   CREATE_DATA_CONNECTION_CONFIRMATION,
   DATA_INTEGRATION_LIMITS,
+  REPORT_DATA_DELIVERY_CONFIRMATION,
+  deliveryPlanOption,
   type DataConnection,
   type DataDelivery,
   type DataDeliverySummary,
 } from "../lib/data-integrations";
 import { closedOutcomeDatePreset } from "../lib/outcome-import";
+import { decodeOutcomePlan, OUTCOME_PLAN_LIMIT } from "../lib/outcome-plans";
 import type { OutcomePeriodInput } from "../lib/outcomes";
 import "./data-integrations.css";
 
@@ -50,6 +53,15 @@ function statusMessage(
     return "Your sign-in has expired. Sign in again, then refresh this section.";
   if (status === 403 && code === "recent_signin_required")
     return "To create a delivery key, sign out and sign in again, then return here within 15 minutes. A new sign-in is not requested automatically.";
+  if (status === 409 && code === "data_plan_single_period")
+    return "Send the planned month on its own. This delivery is still pending, with all of its totals unchanged.";
+  if (status === 409 && code === "data_plan_mismatch")
+    return "The plan and delivery must use the same dates, currency and export source. No totals were changed.";
+  if (
+    status === 409 &&
+    (code === "data_plan_not_pending" || code === "data_plan_delivery_used")
+  )
+    return "This plan or delivery has already been reported or closed. No totals were overwritten.";
   if (status === 409)
     return "This item or its reporting dates have changed. Nothing was overwritten. Refresh the list and review it again before taking another action.";
   if (status === 429)
@@ -108,6 +120,9 @@ export default function DataIntegrations() {
   const [connections, setConnections] = useState<DataConnection[] | null>(null),
     [deliveries, setDeliveries] = useState<DataDeliverySummary[] | null>(null),
     [detail, setDetail] = useState<DataDelivery | null>(null),
+    [planOption, setPlanOption] = useState<ReturnType<
+      typeof deliveryPlanOption
+    > | null>(null),
     [key, setKey] = useState(""),
     [keyConnection, setKeyConnection] = useState<string | null>(null),
     [revokeId, setRevokeId] = useState<string | null>(null),
@@ -127,6 +142,7 @@ export default function DataIntegrations() {
   const resetPrivatePreview = useCallback(() => {
     detailGeneration.current++;
     setDetail(null);
+    setPlanOption(null);
     setReviewed(false);
     setDiscardConfirmed(false);
   }, []);
@@ -317,6 +333,7 @@ export default function DataIntegrations() {
     setBusy(true);
     setMessage("");
     setDetail(null);
+    setPlanOption(null);
     setReviewed(false);
     setDiscardConfirmed(false);
     try {
@@ -340,7 +357,36 @@ export default function DataIntegrations() {
         throw new Error(
           "This delivery could not be confirmed. Refresh the list before continuing.",
         );
-      setDetail(value.delivery);
+      const delivery = value.delivery as DataDelivery;
+      let offer = null;
+      if (delivery.status === "pending" && delivery.periods?.length) {
+        // The recommendation is advisory only. The write locks both records,
+        // validates the stored payload, and rechecks every match.
+        try {
+          const response = await fetch("/api/account/outcome-plans", {
+            cache: "no-store",
+          });
+          if (response.status === 401) {
+            forgetKey();
+            throw new Error("session");
+          }
+          const data = await response.json();
+          if (
+            response.ok &&
+            Array.isArray(data.plans) &&
+            data.plans.length <= OUTCOME_PLAN_LIMIT
+          )
+            offer = deliveryPlanOption(
+              delivery.periods,
+              data.plans.map(decodeOutcomePlan),
+            );
+        } catch {
+          // Ordinary import remains available and enforces the plan reservation.
+        }
+      }
+      if (!alive.current || current !== detailGeneration.current) return;
+      setPlanOption(offer);
+      setDetail(delivery);
     } catch (error) {
       if (alive.current && current === detailGeneration.current) {
         if (error instanceof Error) setMessage(error.message);
@@ -351,12 +397,14 @@ export default function DataIntegrations() {
     }
   }
 
-  async function finishDelivery(action: "import" | "discard") {
+  async function finishDelivery(action: "import" | "discard" | "report-plan") {
     if (
       !detail ||
       busy ||
       detail.status !== "pending" ||
       (action === "import" && (!reviewed || !detail.periods?.length)) ||
+      (action === "report-plan" &&
+        (!reviewed || planOption?.kind !== "match")) ||
       (action === "discard" && !discardConfirmed)
     )
       return;
@@ -365,9 +413,9 @@ export default function DataIntegrations() {
     const current = detailGeneration.current;
     try {
       const response = await fetch(
-        `/api/account/data-deliveries/${detail.id}${action === "import" ? "/import" : ""}`,
+        `/api/account/data-deliveries/${detail.id}${action === "discard" ? "" : `/${action}`}`,
         {
-          method: action === "import" ? "POST" : "DELETE",
+          method: action === "discard" ? "DELETE" : "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(
             action === "import"
@@ -375,7 +423,14 @@ export default function DataIntegrations() {
                   revision: detail.revision,
                   confirm: "IMPORT REVIEWED TOTALS",
                 }
-              : { revision: detail.revision },
+              : action === "report-plan" && planOption?.kind === "match"
+                ? {
+                    revision: detail.revision,
+                    planId: planOption.plan.id,
+                    planRevision: planOption.plan.revision,
+                    confirm: REPORT_DATA_DELIVERY_CONFIRMATION,
+                  }
+                : { revision: detail.revision },
           ),
         },
       );
@@ -401,10 +456,14 @@ export default function DataIntegrations() {
           ? "Delivery discarded. Its aggregate payload has been removed; no outcomes were imported."
           : value.result?.replayed
             ? "This delivery was already processed. Previously deleted periods have not been recreated. Refresh your outcomes to see what remains."
-            : "Reviewed totals imported privately. Existing periods were not overwritten. Your issued scores and permissions are unchanged.",
+            : action === "report-plan"
+              ? "Reviewed totals applied to your reporting plan. No existing outcomes were overwritten."
+              : "Reviewed totals imported privately. Existing periods were not overwritten. Your issued scores and permissions are unchanged.",
       );
-      if (action === "import")
+      if (action !== "discard")
         window.dispatchEvent(new Event("grader:outcomes-changed"));
+      if (action === "report-plan")
+        window.dispatchEvent(new Event("grader:outcome-plans-changed"));
     } catch (error) {
       if (alive.current && current === detailGeneration.current) {
         resetPrivatePreview();
@@ -647,7 +706,10 @@ export default function DataIntegrations() {
                     {delivery.periodCount === 1 ? "period" : "periods"}
                   </strong>
                   <p>
-                    Received {dateLabel(delivery.createdAt)} · {delivery.status}
+                    Received {dateLabel(delivery.createdAt)} ·{" "}
+                    {delivery.reportingPlanId
+                      ? "applied to reporting plan"
+                      : delivery.status}
                   </p>
                   {delivery.status === "pending" && (
                     <p>Review before {dateLabel(delivery.expiresAt)}</p>
@@ -676,8 +738,11 @@ export default function DataIntegrations() {
         >
           <h4>Review delivered totals</h4>
           <p>
-            Received {dateLabel(detail.createdAt)} · {detail.status}. The
-            sender’s accounting and funnel definitions remain your
+            Received {dateLabel(detail.createdAt)} ·{" "}
+            {detail.reportingPlanId
+              ? "applied to reporting plan"
+              : detail.status}
+            . The sender’s accounting and funnel definitions remain your
             responsibility. Unknown is different from zero.
           </p>
           {detail.status === "pending" && detail.periods?.length ? (
@@ -711,29 +776,76 @@ export default function DataIntegrations() {
                   </dl>
                 </article>
               ))}
-              <label
-                className="data-integrations-choice"
-                htmlFor={`${id}-reviewed`}
-              >
-                <input
-                  id={`${id}-reviewed`}
-                  type="checkbox"
-                  checked={reviewed}
-                  disabled={busy}
-                  onChange={(event) => setReviewed(event.target.checked)}
-                />
-                <span>
-                  I reviewed every period, amount and unknown value and want to
-                  import these totals privately.
-                </span>
-              </label>
-              <button
-                className="btn btn-primary"
-                disabled={busy || !reviewed}
-                onClick={() => void finishDelivery("import")}
-              >
-                Import reviewed delivery
-              </button>
+              {planOption?.kind === "match" ? (
+                <div className="data-integrations-plan">
+                  <h5>Use these totals for your reporting plan</h5>
+                  <p>
+                    This delivers the exact closed period on your plan:{" "}
+                    {planOption.plan.startDate} to {planOption.plan.endDate} ·{" "}
+                    {planOption.plan.currency} · export. Saving reports that
+                    period using the plan’s original baseline. It updates no
+                    existing period, grade or permission.
+                  </p>
+                  <label
+                    className="data-integrations-choice"
+                    htmlFor={`${id}-reviewed`}
+                  >
+                    <input
+                      id={`${id}-reviewed`}
+                      type="checkbox"
+                      checked={reviewed}
+                      disabled={busy}
+                      onChange={(event) => setReviewed(event.target.checked)}
+                    />
+                    <span>
+                      I reviewed this month’s totals and unknown values and want
+                      to record them on the matching reporting plan.
+                    </span>
+                  </label>
+                  <button
+                    className="btn btn-primary"
+                    disabled={busy || !reviewed}
+                    onClick={() => void finishDelivery("report-plan")}
+                  >
+                    Apply reviewed totals to plan
+                  </button>
+                </div>
+              ) : planOption && planOption.kind !== "ordinary" ? (
+                <p className="data-integrations-plan" role="status">
+                  {planOption.kind === "separate"
+                    ? "This batch includes a reserved reporting window. Send the planned period by itself with a new request ID, and send any other periods separately. Every row in this delivery remains pending."
+                    : planOption.kind === "already-reported"
+                      ? "This month has already been reported to a plan. This delivery cannot overwrite it. To correct figures you already saved, open the reporting plan."
+                      : "These totals overlap a reporting plan, but the dates, export source or currency do not match. Check your plan before sending a corrected delivery."}{" "}
+                  <a href="#outcome-plans">Open reporting plans</a>
+                </p>
+              ) : (
+                <>
+                  <label
+                    className="data-integrations-choice"
+                    htmlFor={`${id}-reviewed`}
+                  >
+                    <input
+                      id={`${id}-reviewed`}
+                      type="checkbox"
+                      checked={reviewed}
+                      disabled={busy}
+                      onChange={(event) => setReviewed(event.target.checked)}
+                    />
+                    <span>
+                      I reviewed every period, amount and unknown value and want
+                      to import these totals privately.
+                    </span>
+                  </label>
+                  <button
+                    className="btn btn-primary"
+                    disabled={busy || !reviewed}
+                    onClick={() => void finishDelivery("import")}
+                  >
+                    Import reviewed delivery
+                  </button>
+                </>
+              )}
               <div className="data-integrations-discard">
                 <label
                   className="data-integrations-choice"
@@ -762,6 +874,12 @@ export default function DataIntegrations() {
                 </button>
               </div>
             </>
+          ) : detail.reportingPlanId ? (
+            <p>
+              These reviewed totals were applied to a reporting plan. The
+              delivery payload was cleared. To see or correct the recorded
+              outcome, <a href="#outcome-plans">open reporting plans</a>.
+            </p>
           ) : (
             <p>
               The pending payload is no longer available. Imported periods stay

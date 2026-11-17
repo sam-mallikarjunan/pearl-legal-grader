@@ -14,6 +14,7 @@ import {
   parseCreateDataConnection,
   parseDataDeliveryInput,
   parseDataIntegrationRevision,
+  parseDataPlanDelivery,
 } from "../data-integrations";
 import { decodeOutcomeImportResult } from "../outcome-batch-import";
 import { accountRpc } from "./account-db";
@@ -54,6 +55,26 @@ const errors: Record<string, [number, string]> = {
   data_not_found: [
     404,
     "This connection or delivery is unavailable in your workspace.",
+  ],
+  data_plan_delivery_used: [
+    409,
+    "This delivery has already been used. It cannot be attached again or overwrite the outcome.",
+  ],
+  data_plan_single_period: [
+    409,
+    "Send the planned month as a single-period delivery. No totals were changed.",
+  ],
+  data_plan_not_pending: [
+    409,
+    "This reporting plan has already been reported or closed. No totals were changed.",
+  ],
+  data_plan_not_closed: [
+    409,
+    "The planned period must end before it can be reported.",
+  ],
+  data_plan_mismatch: [
+    409,
+    "Delivery dates, currency and export source must match the reporting plan exactly.",
   ],
   invalid_data_delivery: [
     400,
@@ -233,6 +254,37 @@ export function createDataIntegrationStore(d: {
         delivery.status !== "imported" ||
         delivery.importBatchId !== result.batchId ||
         delivery.periodCount !== result.periodIds.length
+      )
+        throw fail();
+      return { delivery, result };
+    },
+    async reportPlan(userId: string, id: string, body: unknown) {
+      owner(userId);
+      identifier(id);
+      const input = parseDataPlanDelivery(body);
+      const v = await rpc("grader_apply_delivery_to_plan", {
+        p_user_id: userId,
+        p_delivery_id: id,
+        p_delivery_revision: input.revision,
+        p_plan_id: input.planId,
+        p_plan_revision: input.planRevision,
+      });
+      if (!accountRecord(v)) throw fail();
+      const delivery = decodeDataDelivery(v.delivery);
+      // Keep invalid backend responses on the integrations error contract.
+      let result;
+      try {
+        result = decodeOutcomeImportResult(v.result);
+      } catch {
+        throw fail();
+      }
+      if (
+        delivery.status !== "imported" ||
+        delivery.id !== id.toLowerCase() ||
+        delivery.revision !== input.revision + 1 ||
+        delivery.reportingPlanId !== input.planId ||
+        delivery.importBatchId !== result.batchId ||
+        result.periodIds.length !== 1
       )
         throw fail();
       return { delivery, result };

@@ -1,0 +1,25 @@
+# First Improvement: private pilot operator guide
+
+**Question:** Can an owner of a small practice find one useful step, follow through, and use a later measure to make a decision? Start with about 10 distinct practices in one main practice area. Treat this as a usability and feasibility pilot. It cannot produce a peer benchmark, validate a score, or establish the effect of an action.
+
+- **Enroll:** Share the [pilot account link](https://pearl-legal-grader.vercel.app/account?pilot=first-improvement-v1#first-improvement-pilot) with a permissioned audience after the invitation owner is named and the link is verified. The link identifies the cohort; the signed-in owner must still opt in. It does not prove who sent the invite, describe an existing client relationship, or grant anybody access to a practice's private records. Do not offer research, marketing, publication, reminders, or sales follow-up as conditions of participation.
+- **Set up:** Ask the owner to complete or bring one current assessment. Show them how to review one issued action, choose one target measure, and identify a full, closed baseline month with known values. Agree on a future full month and record the change date before that month starts. Use the same source, currency and measure definition for both periods. Account for time off, changes in case mix, pricing or staffing, and simultaneous actions. Keep client identifiers, matter details, case documents, credentials and free-form notes about clients out of the grader and the pilot tracker.
+- **Close the loop:** After the registered month closes, use its actual totals. If they arrive by automation as a one-month delivery, review them in the inbox and explicitly apply them to the matching plan. Ask the owner to review the follow-up and decide whether to keep, change or stop the action. Review unclear or erroneous advice separately. Keep manual reporting and correction available. If the baseline changes or the result is incomplete, discuss the missing evidence instead of forcing a comparison.
+- **Ask four questions:** What was the first useful finding? What was hard to answer or get from your tools? What did you actually change and what else changed? What will you do next in light of the follow-up? Keep only permissioned, de-identified observations in the pilot notes.
+- **Follow through with Pearl only when requested:** Assign an operator to check the existing requested-help queue during the pilot. A suggested service target is acknowledgment within two business days for new requests; assign coverage before inviting firms. Separately track request, qualification, attended conversation and first incremental payment only when the same consented record can be reconciled. Follow normal ownership after payment. Participation, an email address, an assessment or a grade does not authorize outreach or imply a qualified opportunity. HubSpot remains deferred; there is no automatic CRM sync.
+
+## Decision at the first close
+
+Review distinct owner workspaces in the operator view at [Admin → Pilot](https://pearl-legal-grader.vercel.app/admin/pilot). Record the cohort, observation date, numerator, denominator and eligibility for each measure. Distinguish an owner saying an action was useful from a saved progress state, an exact mature follow-up and a commercial conversation. A workspace is an account unit; during interviews confirm you are hearing from separate practices.
+
+For a proposed cohort of ten, look for at least six to save a report and choose an action, four to register a future follow-up, and three to return with a comparable follow-up and describe what they learned. If fewer than three exact windows have actually closed, mark repeat-use evidence immature. With this sample, report counts and what occurred; avoid generalizing rates to small firms or attributing a change to the action. Stop and repair a material trust or data-quality issue before broadening invitations.
+
+| What the pilot shows | Next decision |
+| --- | --- |
+| Owners understand and act on the advice, but stop before registration | Simplify the baseline and plan steps. |
+| Owners repeatedly re-enter totals from the same system | Confirm the upstream definitions and evaluate one minimally scoped native connector. |
+| Owners return with usable follow-ups and can name a better decision | Recruit a second tightly specified cohort. Keep research participation optional. |
+| Owners repeatedly reject, correct or cannot act on recommendations | Review the rubric and expand the source inventory for those measures before changing weights or expanding distribution. |
+| Interest is mostly in Pearl's service, with little independent value from the grader | Treat that as an acquisition signal only. Improve the diagnostic before claiming a useful recurring product. |
+
+Use public practice benchmarks only once the independent comparison groups satisfy the existing consent, comparability and privacy rules. Private action registrations do not establish causal effects or authorize pooling across firms. Do not change production scoring weights from this pilot.
