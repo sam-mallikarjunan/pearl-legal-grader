@@ -199,14 +199,17 @@ function writeLocation(
   replace: boolean,
 ) {
   const url = new URL(window.location.href);
-  for (const key of ["view", "step", "report"]) url.searchParams.delete(key);
-  if (view !== "home") url.searchParams.set("view", view);
-  if (view === "assessment") url.searchParams.set("step", String(step));
+  const params = new URLSearchParams({ view });
+  if (view === "assessment") params.set("step", String(step));
   if ((view === "report" || view === "progress") && reportId)
-    url.searchParams.set("report", reportId);
-  const next = `${url.pathname}${url.search}${url.hash}`;
-  if (replace) window.history.replaceState(null, "", next);
-  else window.history.pushState(null, "", next);
+    params.set("report", reportId);
+  const hash = `#${params.toString()}`;
+  if (url.hash === hash) return;
+  // These views belong to this device. Next's patched History API can refetch
+  // server data and, if a reload cancels it, navigate to an older view's URL.
+  // Native fragment navigation keeps the server URL constant and avoids that race.
+  if (replace) window.location.replace(`${url.pathname}${url.search}${hash}`);
+  else window.location.hash = hash;
 }
 
 function ScoreRing({
@@ -478,10 +481,29 @@ export default function GraderApp({
   }, [store.assessments]);
   useEffect(() => {
     if (!loaded) return;
-    const onPopState = () =>
+    const onPopState = () => {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      if (
+        params.has("view") &&
+        locationKey(
+          params.get("view") as View,
+          Number(params.get("step") ?? 0),
+          params.get("report"),
+        ) === lastLocation.current
+      )
+        return;
       restoreLocation(historyRef.current, draftRef.current);
+    };
+    const onHashChange = () => {
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      if (params.has("view")) onPopState();
+    };
     window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, [loaded]);
   useLayoutEffect(() => {
     if (!loaded) return;
@@ -491,8 +513,8 @@ export default function GraderApp({
       restoringLocation.current = null;
     }
     if (lastLocation.current !== key) {
-      writeLocation(view, wizardStep, selectedId, false);
       lastLocation.current = key;
+      writeLocation(view, wizardStep, selectedId, false);
     }
   }, [loaded, view, wizardStep, selectedId]);
   useEffect(() => {
@@ -643,7 +665,10 @@ export default function GraderApp({
     history: SavedAssessment[],
     draft: AssessmentDraft | null,
   ) {
-    const params = new URLSearchParams(window.location.search);
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const params = fragment.has("view")
+      ? fragment
+      : new URLSearchParams(window.location.search);
     const requestedReport = params.get("report");
     const requestedView =
       params.get("view") ?? (requestedReport ? "report" : "home");
@@ -2771,7 +2796,15 @@ export default function GraderApp({
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main-content">
+      <a
+        className="skip-link"
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          mainRef.current?.focus();
+          mainRef.current?.scrollIntoView();
+        }}
+      >
         Skip to main content
       </a>
       <div className="preview-bar" role="region" aria-label="Preview status">
