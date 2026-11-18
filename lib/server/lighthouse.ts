@@ -79,13 +79,22 @@ export type LighthouseSetupStage =
   | "browserinstall"
   | "chromesmoke"
   | "snapshot";
+export type LighthouseStage =
+  | LighthouseSetupStage
+  | "validate"
+  | "write"
+  | "audit"
+  | "read"
+  | "parse";
 export interface LighthouseSetupDiagnostic {
-  stage: LighthouseSetupStage;
+  stage: LighthouseStage;
   classification:
     | "oidc_missing"
     | "provider_api_error"
     | "sdk_type_error"
     | "setup_command_failed"
+    | "missing_result"
+    | "invalid_result"
     | "unknown";
   providerStatus?: number;
   providerCode?: string;
@@ -93,7 +102,7 @@ export interface LighthouseSetupDiagnostic {
 export class LighthouseSetupError extends Error {
   public readonly diagnostic: LighthouseSetupDiagnostic;
   constructor(
-    public readonly stage: LighthouseSetupStage,
+    public readonly stage: LighthouseStage,
     error?: unknown,
   ) {
     super(`lighthouse_setup_${stage}`);
@@ -142,10 +151,11 @@ export class LighthouseSetupError extends Error {
 /** Fixed operator diagnostics only; never includes exception messages, response bodies or causes. */
 export function lighthouseSetupDiagnostic(
   error: unknown,
+  stage: LighthouseStage = "create",
 ): LighthouseSetupDiagnostic {
   return error instanceof LighthouseSetupError
     ? error.diagnostic
-    : new LighthouseSetupError("create", error).diagnostic;
+    : new LighthouseSetupError(stage, error).diagnostic;
 }
 async function setupStage<T>(
   stage: LighthouseSetupStage,
@@ -158,16 +168,18 @@ async function setupStage<T>(
   }
 }
 
-/** Mirrors the SDK's documented stale-snapshot detection; never retries auth/quota failures. */
+/** Recognizes the provider's two explicit expired-snapshot responses. */
 export function isExpiredLighthouseSnapshot(error: unknown): boolean {
   if (typeof error !== "object" || error === null) return false;
   const value = error as {
     response?: { status?: unknown };
-    json?: { error?: { code?: unknown } };
+    json?: { error?: { code?: unknown; message?: unknown } };
   };
   return (
     value.response?.status === 410 &&
-    value.json?.error?.code === "snapshot_not_found"
+    (value.json?.error?.code === "snapshot_not_found" ||
+      (value.json?.error?.code === "bad_request" &&
+        value.json.error.message === "Snapshot expired or deleted."))
   );
 }
 
@@ -332,7 +344,7 @@ try {
 const noMeasurements = (url: string): WebsitePerformance => ({
   ...unavailablePerformance(
     url,
-    "The isolated mobile Lighthouse audit did not finish within this pilot's scan window. Website observations remain useful; unmeasured checks do not reduce your score.",
+    "The isolated mobile performance check is temporarily unavailable. You can review the available website findings and try a new check later. Unmeasured checks do not reduce your score.",
   ),
   provider: "vercel-lighthouse",
 });
@@ -421,11 +433,13 @@ export function createSandboxLighthouseRunner(
   createSandbox: SandboxFactory,
   validateAddress = resolvePublicAddress,
   snapshotId?: string,
+  onFailure?: (diagnostic: LighthouseSetupDiagnostic) => void,
 ) {
   return async (input: string): Promise<WebsitePerformance> => {
     // Never echo rejected userinfo or query tokens through the result contract.
     let sourceUrl = "https://unavailable.invalid/";
     let sandbox: AuditSandbox | undefined;
+    let stage: LighthouseStage = "validate";
     try {
       const url = normalizeWebsiteUrl(input);
       sourceUrl = url.href;
@@ -445,6 +459,7 @@ export function createSandboxLighthouseRunner(
         networkPolicy: restrictedNetwork,
       };
       let usingSnapshot = Boolean(snapshotId);
+      stage = "create";
       try {
         sandbox = await createSandbox({
           ...options,
@@ -460,8 +475,11 @@ export function createSandboxLighthouseRunner(
           image: "vercel/sandbox/node:24",
         });
       }
+      stage = "network";
       await disableSandboxIpv6(sandbox);
+      stage = "install";
       if (!usingSnapshot) await bootstrapRuntime(sandbox);
+      stage = "write";
       await sandbox.writeFiles([
         {
           path: `${RUNTIME_DIRECTORY}/pearl-lighthouse-input.json`,
@@ -472,16 +490,26 @@ export function createSandboxLighthouseRunner(
           content: Buffer.from(lighthouseRuntimeScript()),
         },
       ]);
+      stage = "network";
       await sandbox.update({ networkPolicy: restrictedNetwork });
+      stage = "audit";
       await auditCommand(sandbox, "node", [RUNTIME_SCRIPT]);
+      stage = "read";
       const result = await sandbox.readFileToBuffer({ path: RESULT_FILE });
-      if (!result || result.byteLength > 1_000_000)
+      if (!result || result.byteLength > 1_000_000) {
+        onFailure?.({ stage, classification: "missing_result" });
         return noMeasurements(sourceUrl);
-      return parseSandboxLighthouseResponse(
+      }
+      stage = "parse";
+      const performance = parseSandboxLighthouseResponse(
         JSON.parse(result.toString("utf8")),
         sourceUrl,
       );
-    } catch {
+      if (performance.status === "unavailable")
+        onFailure?.({ stage, classification: "invalid_result" });
+      return performance;
+    } catch (error) {
+      onFailure?.(lighthouseSetupDiagnostic(error, stage));
       return noMeasurements(sourceUrl);
     } finally {
       // The VM also has a hard provider timeout if stopping fails or the caller exits.
@@ -501,6 +529,7 @@ export async function runSandboxLighthouse(
     },
     resolvePublicAddress,
     process.env.LIGHTHOUSE_SANDBOX_SNAPSHOT_ID,
+    (diagnostic) => console.error("lighthouse_audit_failed", diagnostic),
   )(input);
 }
 

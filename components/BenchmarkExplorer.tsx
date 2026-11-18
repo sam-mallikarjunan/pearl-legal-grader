@@ -20,6 +20,8 @@ import {
   searchIndustryBenchmarks,
 } from "../lib/benchmarks";
 import type { PublicBenchmarkSummary } from "../lib/benchmarks-public";
+import { parseStore, STORAGE_KEY } from "../lib/storage";
+import type { Goal, PracticeContext } from "../lib/types";
 import PracticeBenchmarks from "./PracticeBenchmarks";
 
 const domainLabels = {
@@ -43,10 +45,28 @@ const percent = (n: number | null) =>
 const days = (n: number | null) =>
   n === null ? "Not enough information" : `${n.toFixed(1)} days`;
 
+const startingReferences: Record<Goal, readonly string[]> = {
+  more_clients: ["phone-answer", "email-response", "lcp"],
+  better_conversion: ["phone-answer", "email-response", "lcp"],
+  collect_cash: ["realization", "collection", "total-lockup"],
+  less_admin: ["utilization", "total-lockup", "solo-mfa"],
+  sustainable_practice: ["utilization", "total-lockup", "solo-mfa"],
+};
+const goalLabels: Record<Goal, string> = {
+  more_clients: "finding suitable clients",
+  better_conversion: "converting more inquiries",
+  collect_cash: "improving cash collection",
+  less_admin: "reducing administration",
+  sustainable_practice: "building a sustainable practice",
+};
+
 export default function BenchmarkExplorer() {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [kind, setKind] = useState("All");
+  const [showAll, setShowAll] = useState(false);
+  const [practiceContext, setPracticeContext] =
+    useState<PracticeContext | null>(null);
   const [peers, setPeers] = useState<PublicBenchmarkSummary | null>(null);
   const [peerState, setPeerState] = useState(
     "Checking whether a comparable group is ready…",
@@ -64,6 +84,18 @@ export default function BenchmarkExplorer() {
     annualCollections: "",
   });
   useEffect(() => {
+    try {
+      const saved = parseStore(window.localStorage.getItem(STORAGE_KEY));
+      const latest = saved?.assessments
+        .filter((report) => !report.isSample)
+        .sort(
+          (left, right) =>
+            Date.parse(right.createdAt) - Date.parse(left.createdAt),
+        )[0];
+      if (latest) setPracticeContext(latest.assessment.contextSnapshot);
+    } catch {
+      // The references remain available when this device cannot read storage.
+    }
     const controller = new AbortController();
     fetch("/api/benchmarks", { signal: controller.signal, cache: "no-store" })
       .then(async (res) => {
@@ -85,6 +117,25 @@ export default function BenchmarkExplorer() {
     return () => controller.abort();
   }, []);
   const cards = searchIndustryBenchmarks(query, category, kind);
+  const filtering = query.trim() !== "" || category !== "All" || kind !== "All";
+  let startingIds = startingReferences[practiceContext?.goal ?? "more_clients"];
+  if (
+    practiceContext &&
+    practiceContext.feeModel !== "hourly" &&
+    startingIds.includes("utilization")
+  ) {
+    startingIds = ["phone-answer", "total-lockup", "solo-mfa"];
+  }
+  if (
+    practiceContext?.goal === "collect_cash" &&
+    practiceContext.feeModel !== "hourly"
+  ) {
+    startingIds = ["collection", "total-lockup", "phone-answer"];
+  }
+  const visibleCards =
+    showAll || filtering
+      ? cards
+      : startingIds.flatMap((id) => cards.filter((card) => card.id === id));
   const invalidInput = (input: Record<string, string>) =>
     Object.values(input).some(
       (value) => value.trim() !== "" && parseBenchmarkNumber(value) === null,
@@ -144,56 +195,59 @@ export default function BenchmarkExplorer() {
           </p>
         </section>
 
-        <section
-          className="benchmark-peer card"
-          aria-labelledby="peer-benchmark-title"
-        >
-          <div>
-            <p className="eyebrow">OUR CONTRIBUTOR DATA</p>
-            <h2 id="peer-benchmark-title">Evidence before comparisons.</h2>
-          </div>
-          <p aria-live="polite">{peers ? peers.explanation : peerState}</p>
-          {peers?.status === "descriptive" && (
-            <>
-              <p className="fine-print">
-                {peers.cohortSizeBand} consenting workspaces · Current release{" "}
-                {peers.releaseId}
-              </p>
-              <div className="benchmark-peer-grid">
-                {peers.domains.map((domain) => (
-                  <div key={domain.id}>
-                    <span>{domainLabels[domain.id]}</span>
-                    <strong>
-                      {domain.medianScore === null
-                        ? "Not published"
-                        : `${domain.medianScore}/100`}
-                    </strong>
-                    <small>
-                      {domain.status === "suppressed"
-                        ? "Fewer than 30 known scores"
-                        : `Rounded median · ${domain.cohortSizeBand} workspaces`}
-                    </small>
-                  </div>
+        <details className="benchmark-comparison-details">
+          <summary>Compare with contributing practices</summary>
+          <section
+            className="benchmark-peer card"
+            aria-labelledby="peer-benchmark-title"
+          >
+            <div>
+              <p className="eyebrow">OUR CONTRIBUTOR DATA</p>
+              <h2 id="peer-benchmark-title">Evidence before comparisons.</h2>
+            </div>
+            <p aria-live="polite">{peers ? peers.explanation : peerState}</p>
+            {peers?.status === "descriptive" && (
+              <>
+                <p className="fine-print">
+                  {peers.cohortSizeBand} consenting workspaces · Current release{" "}
+                  {peers.releaseId}
+                </p>
+                <div className="benchmark-peer-grid">
+                  {peers.domains.map((domain) => (
+                    <div key={domain.id}>
+                      <span>{domainLabels[domain.id]}</span>
+                      <strong>
+                        {domain.medianScore === null
+                          ? "Not published"
+                          : `${domain.medianScore}/100`}
+                      </strong>
+                      <small>
+                        {domain.status === "suppressed"
+                          ? "Fewer than 30 known scores"
+                          : `Rounded median · ${domain.cohortSizeBand} workspaces`}
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <details>
+              <summary>How contributor comparisons work</summary>
+              <ul>
+                {(
+                  peers?.limitations ?? [
+                    "At least 30 distinct consenting workspaces; one recent eligible assessment per workspace, using the same scoring release.",
+                    "A self-selected, unverified sample cannot describe the whole legal profession.",
+                    "Unknown observations stay unknown. Rubric points are not conversion percentages or legal-quality ratings.",
+                    "No public subgroup filters, private answers, workspace identifiers, or small counts are published.",
+                  ]
+                ).map((line) => (
+                  <li key={line}>{line}</li>
                 ))}
-              </div>
-            </>
-          )}
-          <details>
-            <summary>How contributor comparisons work</summary>
-            <ul>
-              {(
-                peers?.limitations ?? [
-                  "At least 30 distinct consenting workspaces; one recent eligible assessment per workspace, using the same scoring release.",
-                  "A self-selected, unverified sample cannot describe the whole legal profession.",
-                  "Unknown observations stay unknown. Rubric points are not conversion percentages or legal-quality ratings.",
-                  "No public subgroup filters, private answers, workspace identifiers, or small counts are published.",
-                ]
-              ).map((line) => (
-                <li key={line}>{line}</li>
-              ))}
-            </ul>
-          </details>
-        </section>
+              </ul>
+            </details>
+          </section>
+        </details>
 
         <section
           aria-labelledby="industry-reference-title"
@@ -203,7 +257,7 @@ export default function BenchmarkExplorer() {
             <div>
               <p className="eyebrow">INDUSTRY REFERENCES</p>
               <h2 id="industry-reference-title">
-                Twelve useful starting points.
+                Start with a useful comparison.
               </h2>
             </div>
             <p>
@@ -212,6 +266,14 @@ export default function BenchmarkExplorer() {
               target.
             </p>
           </div>
+          {!showAll && !filtering && (
+            <p className="benchmark-starting-note">
+              {practiceContext
+                ? `These starting measures fit your latest device report’s goal of ${goalLabels[practiceContext.goal]}.`
+                : "Start with these three measures, or search the complete reference library."}{" "}
+              Check the definition and sample before comparing your own figures.
+            </p>
+          )}
           <div className="benchmark-filters">
             <label className="benchmark-search">
               <span>Search references</span>
@@ -252,10 +314,24 @@ export default function BenchmarkExplorer() {
             </label>
           </div>
           <p className="fine-print benchmark-result-count" aria-live="polite">
-            {cards.length} reference{cards.length === 1 ? "" : "s"} shown
+            {visibleCards.length} of {cards.length} reference
+            {cards.length === 1 ? "" : "s"} shown
           </p>
-          <div className="benchmark-card-grid">
-            {cards.map((card) => (
+          {!filtering && (
+            <button
+              className="btn btn-secondary benchmark-library-toggle"
+              type="button"
+              aria-expanded={showAll}
+              aria-controls="benchmark-references"
+              onClick={() => setShowAll((current) => !current)}
+            >
+              {showAll
+                ? "Show starting measures"
+                : `Show all ${cards.length} references`}
+            </button>
+          )}
+          <div className="benchmark-card-grid" id="benchmark-references">
+            {visibleCards.map((card) => (
               <article
                 key={card.id}
                 className="card benchmark-reference"
@@ -288,6 +364,12 @@ export default function BenchmarkExplorer() {
                     <dd>{card.cohort}</dd>
                     <dt>Period</dt>
                     <dd>{card.period}</dd>
+                    {card.source.locator && (
+                      <>
+                        <dt>Source location</dt>
+                        <dd>{card.source.locator}</dd>
+                      </>
+                    )}
                     <dt>Denominator</dt>
                     <dd>{card.denominator}</dd>
                     <dt>Limit</dt>

@@ -3,7 +3,7 @@
 :root {
   --ink: #193c36;
   --text: #233d38;
-  --muted: #68766e;
+  --muted: #53644f;
   --paper: #fbfcf8;
   --soft: #f3f5ee;
   --line: #e0e6da;
@@ -103,8 +103,9 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 3px solid #78ab83;
-  outline-offset: 4px;
+  outline: 3px solid #193c36;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 6px #fff;
 }
 input,
 select,
@@ -136,12 +137,12 @@ svg {
   letter-spacing: 0.14em;
   line-height: 1.5;
   display: block;
-  color: #617667;
+  color: #53644f;
 }
 .fine-print {
   font-size: 11px;
   line-height: 1.55;
-  color: #758174;
+  color: #53644f;
 }
 .btn {
   display: inline-flex;
@@ -285,7 +286,7 @@ svg {
   background: #edf1e5;
   font-size: 10px;
   line-height: 1.5;
-  color: #66785c;
+  color: #53644f;
   min-height: 33px;
 }
 .preview-pill {
@@ -385,7 +386,7 @@ svg {
   font-size: 7px;
   letter-spacing: 0.18em;
   font-weight: 600;
-  color: #7e8b75;
+  color: #53644f;
   margin-top: 3px;
 }
 .site-header nav {
@@ -399,7 +400,7 @@ svg {
   font-size: 11px;
   border: 0;
   background: none;
-  color: #6c796c;
+  color: #53644f;
   padding: 11px 0;
   position: relative;
 }
@@ -494,7 +495,6 @@ svg {
 .url-input-row input {
   border: 0;
   background: transparent;
-  outline: 0 !important;
   min-width: 0;
   flex: 1;
   width: 100%;
@@ -527,7 +527,7 @@ svg {
   align-items: center;
   gap: 4px;
   font-size: 9px;
-  color: #758170;
+  color: #53644f;
 }
 .hero-assurances svg {
   color: #6c865e;
@@ -554,7 +554,7 @@ svg {
   gap: 6px;
   font-size: 7px;
   letter-spacing: 0.1em;
-  color: #819074;
+  color: #53644f;
   font-weight: 600;
 }
 .sample-card-top .tag {
@@ -596,7 +596,7 @@ svg {
 .sample-firm span {
   display: block;
   font-size: 8px;
-  color: #8c9588;
+  color: #53644f;
   margin-top: 3px;
 }
 .sample-firm > svg {
@@ -613,7 +613,7 @@ svg {
 .sample-score .eyebrow {
   font-size: 7px;
 }
-.sample-score h3 {
+.sample-score-heading {
   font-family: Georgia, serif;
   font-size: 25px;
   font-weight: 400;
@@ -698,7 +698,7 @@ svg {
   display: block;
   font-size: 6px;
   letter-spacing: 0.12em;
-  color: #839270;
+  color: #53644f;
   font-weight: 600;
 }
 .sample-next strong {
@@ -739,7 +739,7 @@ svg {
   box-shadow: 0 8px 25px #1a402511;
   transform: rotate(-3deg);
   font-size: 8px;
-  color: #7d8874;
+  color: #53644f;
   line-height: 1.7;
 }
 .floating-note strong {
@@ -788,7 +788,7 @@ svg {
   text-align: center;
   font-size: 7px;
   letter-spacing: 0.16em;
-  color: #8e9a80;
+  color: #53644f;
   font-weight: 600;
   margin-bottom: 20px;
 }
@@ -851,7 +851,7 @@ svg {
 .how-steps article > span {
   font-family: Georgia, serif;
   font-size: 21px;
-  color: #9aa788;
+  color: #53644f;
   line-height: 1.2;
 }
 .how-steps h3 {
@@ -935,7 +935,7 @@ svg {
 }
 .evidence-banner.sample {
   background: #faf2e7;
-  color: #8b7255;
+  color: #765630;
   border-color: #efdfc6;
 }
 .evidence-banner .tag,
@@ -977,7 +977,7 @@ svg {
   align-items: center;
   gap: 7px;
   font-size: 9px;
-  color: #8a957c;
+  color: #53644f;
   margin-top: 20px;
 }
 .status-dot {
@@ -1014,7 +1014,7 @@ svg {
   font-size: 11px;
   line-height: 1.8;
   margin-top: 11px;
-  color: #78856c;
+  color: #53644f;
 }
 .report-goal > span:last-child {
   display: flex;
@@ -1024,7 +1024,7 @@ svg {
   margin-top: auto;
   padding-top: 20px;
   font-size: 9px;
-  color: #718461;
+  color: #53644f;
 }
 .section-heading {
   display: flex;
@@ -1065,7 +1065,7 @@ svg {
   justify-content: center;
   border-radius: 50%;
   background: #f2f4e9;
-  color: #7a8d64;
+  color: #53644f;
   font-size: 12px;
   font-family: Georgia, serif;
   flex-shrink: 0;
@@ -1085,7 +1085,7 @@ svg {
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #8b9584;
+  color: #53644f;
 }
 .priority {
   font-size: 8px;
@@ -1097,11 +1097,11 @@ svg {
 }
 .priority.high {
   background: #f3e9d9;
-  color: #9b7c4c;
+  color: #765630;
 }
 .priority.medium {
   background: #edf0e1;
-  color: #7c8f5e;
+  color: #53644f;
 }
 .priority.low {
   background: #eef1ee;
@@ -1204,7 +1204,7 @@ svg {
 .module-value small {
   font-family: Arial, sans-serif;
   font-size: 10px;
-  color: #98a08f;
+  color: #53644f;
   letter-spacing: 0;
   margin-left: 3px;
 }
@@ -1313,7 +1313,7 @@ svg {
 .strength-item span {
   display: block;
   font-size: 9px;
-  color: #929b88;
+  color: #53644f;
   margin-top: 3px;
 }
 .safeguards-title {
@@ -1342,7 +1342,7 @@ svg {
   border-radius: 4px;
   white-space: nowrap;
   background: #f0f2e9;
-  color: #7b8b6c;
+  color: #53644f;
 }
 .control-tag.no {
   background: #f8e9df;
@@ -1391,7 +1391,7 @@ svg {
   justify-content: space-between;
   gap: 15px;
   font-size: 9px;
-  color: #9aa18e;
+  color: #53644f;
 }
 .report-meta .text-link {
   font-size: 9px;
@@ -1436,7 +1436,7 @@ svg {
   align-items: center;
   gap: 13px;
   font-size: 11px;
-  color: #a1a992;
+  color: #53644f;
   padding: 12px 0;
 }
 .step-list li > span {
@@ -1459,7 +1459,7 @@ svg {
   border-color: var(--ink);
 }
 .step-list li.complete {
-  color: #728960;
+  color: #53644f;
 }
 .step-list li.complete > span {
   background: #ebf1e2;
@@ -1478,7 +1478,7 @@ svg {
 .aside-note p {
   font-size: 9px;
   line-height: 1.9;
-  color: #89957a;
+  color: #53644f;
 }
 .assessment-aside > .tag {
   margin-top: 20px;
@@ -1492,7 +1492,7 @@ svg {
   justify-content: space-between;
   font-size: 8px;
   letter-spacing: 0.1em;
-  color: #849175;
+  color: #53644f;
   margin-bottom: 12px;
 }
 .assessment-progress span:last-child {
@@ -1547,8 +1547,9 @@ svg {
 }
 .goal-option:has(input:focus-visible),
 .answer-option:has(input:focus-visible) {
-  outline: 3px solid #78ab83;
+  outline: 3px solid #193c36;
   outline-offset: 3px;
+  box-shadow: 0 0 0 6px #fff;
 }
 .goal-option > svg {
   color: #8f9c7d;
@@ -1560,7 +1561,7 @@ svg {
 }
 .goal-option small {
   font-size: 9px;
-  color: #8e9980;
+  color: #53644f;
   display: block;
   margin-top: 3px;
 }
@@ -1600,7 +1601,7 @@ svg {
   font-size: 10px;
   font-weight: 500;
   gap: 8px;
-  color: #687b5a;
+  color: #53644f;
 }
 .field-label input,
 .field-label select {
@@ -1631,7 +1632,7 @@ svg {
 }
 .wizard-actions > span {
   font-size: 9px;
-  color: #8a977c;
+  color: #53644f;
 }
 .wizard-actions .btn {
   font-size: 11px;
@@ -1652,7 +1653,7 @@ svg {
 }
 .question legend > span {
   font-family: Georgia, serif;
-  color: #9aa788;
+  color: #53644f;
   font-size: 16px;
 }
 .question > p {
@@ -1808,7 +1809,7 @@ svg {
 .progress-stats small {
   font-family: Arial, sans-serif;
   font-size: 9px;
-  color: #89957a;
+  color: #53644f;
   font-weight: 400;
   max-width: 120px;
   line-height: 1.7;
@@ -2069,11 +2070,11 @@ svg {
   border: 0;
   padding: 0;
   font-size: 9px;
-  color: #7a896c;
+  color: #53644f;
 }
 .site-footer > div:last-child > span {
   font-size: 8px;
-  color: #a2aa95;
+  color: #53644f;
   max-width: 170px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2184,8 +2185,9 @@ svg {
   transform: translateX(15px);
 }
 .preference:has(input:focus-visible) {
-  outline: 3px solid #8fae73;
+  outline: 3px solid #193c36;
   outline-offset: 3px;
+  box-shadow: 0 0 0 6px #fff;
 }
 .dialog-data-actions {
   display: flex;
@@ -2270,7 +2272,7 @@ svg {
   .sample-firm strong {
     font-size: 14px;
   }
-  .sample-score h3 {
+  .sample-score-heading {
     font-size: 30px;
   }
   .sample-score p {
@@ -2325,7 +2327,7 @@ svg {
     width: 125px;
     height: 125px;
   }
-  .sample-score h3 {
+  .sample-score-heading {
     font-size: 23px;
   }
   .floating-note {
@@ -2497,7 +2499,7 @@ svg {
   .sample-score .score-ring span {
     font-size: 7px;
   }
-  .sample-score h3 {
+  .sample-score-heading {
     font-size: 20px;
   }
   .sample-score p {
@@ -2904,7 +2906,7 @@ svg {
   .sample-score .score-ring span {
     font-size: 8px;
   }
-  .sample-score h3 {
+  .sample-score-heading {
     font-size: 25px;
   }
   .sample-score p {
@@ -3841,4 +3843,163 @@ svg {
   .improvement-report-entry {
     display: none;
   }
+}
+
+/* Keep evidence, instructions and account choices readable across narrow layouts. */
+:is(
+  .fine-print,
+  .draft-save-note,
+  .evidence-line,
+  .report-goal > span:last-child,
+  .sample-card-top,
+  .hero-assurances,
+  .field-label,
+  .action-controls .field-label
+) {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+:is(.report-page, .assessment-main, .progress-page, .how-section) p:not(.eyebrow):not(.fine-print),
+.report-goal p,
+.action-guide li {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+}
+.eyebrow,
+.priority,
+.control-tag,
+.action-number {
+  color: #53644f;
+}
+:is(.report-goal, .section-heading) .eyebrow,
+.priority,
+.control-tag {
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+.priority.high {
+  color: #765630;
+}
+.btn,
+.btn-small,
+.quiet-button,
+.text-link,
+.site-footer :is(a, button),
+.growth-nav a {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.btn {
+  white-space: normal;
+  min-height: 44px;
+}
+.site-footer > div:last-child > span,
+.footer-brand > span,
+.brand small,
+.preview-banner,
+.preview-pill {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.growth-page > .card,
+.growth-page .card > *,
+.benchmark-page .card > * {
+  min-width: 0;
+}
+.growth-page .card .btn {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .field-label :is(input, select, textarea),
+  .url-form input {
+    font-size: 1rem;
+  }
+  .domain-strip span,
+  .how-steps p,
+  .closing-banner p,
+  .method-note,
+  .score-ring small {
+    font-size: 0.8125rem;
+  }
+  .module-card > .fine-print,
+  .action-controls .fine-print,
+  .action-guide > .fine-print,
+  .url-form .fine-print {
+    font-size: 0.8125rem;
+    color: var(--muted);
+  }
+}
+
+:is(
+  .hero-assurances > span,
+  .sample-firm span,
+  .sample-next > div > span,
+  .floating-note,
+  .domain-strip p,
+  .evidence-banner,
+  .action-kicker > span:not(.priority),
+  .module-value small,
+  .strength-item > div > span,
+  .report-meta > span
+) {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+:is(
+  .action-controls,
+  .action-body,
+  .module-actions,
+  .wizard-actions,
+  .page-heading,
+  .save-banner,
+  .report-meta,
+  .assessment-aside,
+  .dialog .button-row,
+  .dialog-data-actions
+) :is(.btn, .quiet-button, .text-link) {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+.url-form .url-input-row .btn {
+  font-size: 0.875rem;
+  line-height: 1.4;
+}
+@media (max-width: 650px) {
+  .url-form .url-input-row {
+    display: grid;
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+  .url-form .url-input-row .btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}
+.assessment-main .answer-option,
+.assessment-main .control-choice,
+.goal-option strong {
+  font-size: 0.875rem;
+  line-height: 1.55;
+}
+.assessment-main .answer-option:last-child {
+  color: var(--muted);
+}
+.goal-option small,
+.assessment-progress span,
+.wizard-actions > span,
+.field-error {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+}
+.question legend,
+.control-question legend {
+  font-size: 1rem;
+}
+
+.assessment-progress span:last-child,
+.assessment-aside p,
+.aside-note p {
+  font-size: 0.8125rem;
+  line-height: 1.55;
 }

@@ -17,6 +17,7 @@ import {
   SCAN_ACCESS_KEY,
   STORAGE_KEY,
   emptyStore,
+  appendLocalAssessment,
   isActionProgress,
   parseScanAccess,
   parseStore,
@@ -34,6 +35,12 @@ import {
   type CloudReport,
 } from "../lib/account/types";
 import ActionProgressControls from "./ActionProgressControls";
+import {
+  AccountWorkspace,
+  WorkspaceArea,
+  WorkspaceOverview,
+  WorkspaceTool,
+} from "./AccountWorkspace";
 import WebsiteAIReview from "./WebsiteAIReview";
 import LeaderboardEnrollment from "./LeaderboardEnrollment";
 import NurtureEnrollment from "./NurtureEnrollment";
@@ -49,6 +56,10 @@ import FirstImprovement from "./FirstImprovement";
 import PilotParticipation from "./PilotParticipation";
 import MonthlyPracticeBrief from "./MonthlyPracticeBrief";
 import MissedCallPlaybook from "./MissedCallPlaybook";
+import {
+  accountProgressDiffers,
+  mergeAccountProgress,
+} from "../lib/account-device-progress";
 import {
   HELP_CONSENT_TEXT,
   HELP_CONSENT_VERSION,
@@ -91,6 +102,7 @@ export interface AccountPanelProps {
   onImport?: (
     report: SavedAssessment,
     progress?: CloudActionProgress[],
+    useAccountProgress?: boolean,
   ) => void;
   nextPath?: "/admin";
 }
@@ -405,7 +417,7 @@ function localReportDetails(report: SavedAssessment) {
     ...(websiteAccess ? { websiteAccess } : {}),
   };
 }
-function importOnDevice(report: CloudReport) {
+function importOnDevice(report: CloudReport, useAccountProgress = false) {
   const raw = localStorage.getItem(STORAGE_KEY);
   const store = raw === null ? emptyStore() : parseStore(raw);
   if (!store)
@@ -419,21 +431,19 @@ function importOnDevice(report: CloudReport) {
     throw new AccountUiError(
       "This device has a different report with the same identifier. Its original snapshot was preserved.",
     );
-  if (!existing && store.assessments.length >= 40)
-    throw new AccountUiError(
-      "This device has reached its report allowance. Export your data before removing reports.",
-    );
-  if (!existing) store.assessments.unshift(structuredClone(report.snapshot));
-  for (const progress of report.actionProgress) {
-    const key = `${report.snapshot.id}:${progress.actionId}`;
-    if (store.actionStates[key] === undefined)
-      store.actionStates[key] = progress.state;
-    if (progress.details && !store.actionProgress?.[key])
-      store.actionProgress = {
-        ...store.actionProgress,
-        [key]: structuredClone(progress.details),
-      };
-  }
+  store.assessments = appendLocalAssessment(
+    store.assessments,
+    structuredClone(report.snapshot),
+  );
+  Object.assign(
+    store,
+    mergeAccountProgress(
+      store,
+      report.snapshot,
+      report.actionProgress,
+      useAccountProgress,
+    ),
+  );
   store.actionProgress = retainActionProgress(
     store.actionProgress,
     store.assessments,
@@ -453,6 +463,40 @@ export default function AccountPanel({
   const id = useId();
   const [session, setSession] = useState<AccountSession | null>(null);
   const [reports, setReports] = useState<CloudReport[]>([]);
+  const [deviceConflicts, setDeviceConflicts] = useState<string[]>([]);
+  const [accountProgressChoices, setAccountProgressChoices] = useState<
+    Record<string, boolean>
+  >({});
+  useEffect(() => {
+    const update = () => {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        const store = raw === null ? emptyStore() : parseStore(raw);
+        setDeviceConflicts(
+          store
+            ? reports
+                .filter((report) =>
+                  accountProgressDiffers(
+                    store,
+                    report.snapshot,
+                    report.actionProgress,
+                  ),
+                )
+                .map((report) => report.id)
+            : [],
+        );
+      } catch {
+        setDeviceConflicts([]);
+      }
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY || event.key === null) update();
+    };
+    update();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [reports]);
+
   const [guidedSave, setGuidedSave] = useState<{
     localReportId: string;
     accountReportId: string;
@@ -484,6 +528,8 @@ export default function AccountPanel({
   const pendingHelpRequests = useRef<Record<string, string>>({});
 
   function clearPrivateRequestState() {
+    setDeviceConflicts([]);
+    setAccountProgressChoices({});
     setGuidedSave(null);
     setReportEmails({});
     pendingEmailRequests.current = {};
@@ -655,14 +701,25 @@ export default function AccountPanel({
   }
   function openReport(saved: CloudReport) {
     void perform("Opening your saved report", async () => {
+      const useAccountProgress =
+        deviceConflicts.includes(saved.id) &&
+        accountProgressChoices[saved.id] === true;
       if (onImport)
         onImport(
           structuredClone(saved.snapshot),
           structuredClone(saved.actionProgress),
+          useAccountProgress,
         );
-      else importOnDevice(saved);
+      else {
+        importOnDevice(saved, useAccountProgress);
+        window.location.assign(
+          `/?report=${encodeURIComponent(saved.snapshot.id)}`,
+        );
+      }
       setMessage(
-        "Report opened on this device. Existing local reports and local progress were preserved.",
+        useAccountProgress
+          ? "Your device report now uses the account progress you selected."
+          : "Your report is open on this device. Existing device progress was kept. Account progress is available in your private workspace.",
       );
     });
   }
@@ -902,13 +959,24 @@ export default function AccountPanel({
     preferences && stable(preferenceDraft) !== stable(preferences.values);
   return (
     <div aria-label="Private account workspace">
-      <div className="evidence-banner">
-        <LockKeyhole size={19} />
-        <span>
-          Choose what to save. A verified email opens your private workspace; it
-          does not verify authority to represent a practice.
-        </span>
-      </div>
+      {!onImport && (
+        <nav
+          className="workspace-top-links"
+          aria-label="Practice grader navigation"
+        >
+          <span>Pearl Practice Grader</span>
+          <a href="/">Return to the assessment</a>
+        </nav>
+      )}
+      {(!user || onImport) && (
+        <div className="evidence-banner">
+          <LockKeyhole size={19} />
+          <span>
+            Choose what to save. A verified email opens your private workspace;
+            it does not verify authority to represent a practice.
+          </span>
+        </div>
+      )}
       {busy && (
         <p className="fine-print" role="status">
           {busy}…
@@ -926,7 +994,13 @@ export default function AccountPanel({
       )}
       {!user ? (
         <>
-          <h3>Save your progress privately.</h3>
+          {onImport ? (
+            <h3>Save your progress privately.</h3>
+          ) : (
+            <h2 className="account-signin-heading">
+              Save your progress privately.
+            </h2>
+          )}
           <p className="muted">
             You can keep using the grader without an account. Sign in when you
             want to save selected reports and return from another device.
@@ -1116,451 +1190,646 @@ export default function AccountPanel({
               )}
             </section>
           )}
-          {!onImport && (
-            <>
-              <FirstImprovement
-                key={`first-improvement-${user.id}`}
-                reports={reports}
-              />
-              <MonthlyPracticeBrief key={`monthly-brief-${user.id}`} />
-              <MissedCallPlaybook
-                key={`missed-call-playbook-${user.id}`}
-                reports={reports}
-              />
-              <PilotParticipation key={`pilot-participation-${user.id}`} />
-            </>
-          )}
-          <section aria-label="Saved account reports">
-            <h3>
-              <Cloud size={19} /> Your saved reports
-            </h3>
-            {reports.length === 0 ? (
-              <p className="muted">
-                No account reports are shown yet. Open a report in the grader,
-                then choose “Save selected report.”
-              </p>
-            ) : (
-              reports.map((saved) => (
-                <article className="guide-note" key={saved.id}>
-                  <h3>{saved.snapshot.label}</h3>
-                  <p className="fine-print">
-                    Assessed{" "}
-                    {new Date(saved.snapshot.createdAt).toLocaleDateString()} ·{" "}
-                    {saved.snapshot.assessment.releaseSnapshot.label} · Private
-                  </p>
-                  <div className="button-row">
-                    <button
-                      className="btn btn-secondary btn-small"
-                      disabled={!!busy}
-                      onClick={() => openReport(saved)}
-                    >
-                      Open on this device <ArrowRight size={15} />
-                    </button>
-                    <button
-                      className="quiet-button danger"
-                      disabled={!!busy}
-                      onClick={() =>
-                        setRemoveId(removeId === saved.id ? null : saved.id)
-                      }
-                    >
-                      <Trash2 size={14} />
-                      Remove account copy
-                    </button>
-                  </div>
-                  <div
-                    className="guide-note"
-                    aria-label="Requested report email"
+          <AccountWorkspace key={`workspace-${user.id}`} compact={!!onImport}>
+            {!onImport && (
+              <>
+                <WorkspaceArea area="overview">
+                  <WorkspaceOverview reports={reports} />
+                </WorkspaceArea>
+                <WorkspaceArea area="action">
+                  <h2>My action</h2>
+                  <PersonalizedActions
+                    key={`personalized-actions-${user.id}`}
+                    reports={reports}
+                    onReportsChanged={() => loadPrivate()}
+                  />
+                  <MissedCallPlaybook
+                    key={`missed-call-playbook-${user.id}`}
+                    reports={reports}
+                  />
+                  <WorkspaceTool
+                    target="first-improvement"
+                    title="Plan an optional monthly comparison"
                   >
-                    <strong>A short summary in your inbox</strong>
-                    <p className="fine-print">
-                      Request the assessment date, next actions and a private
-                      workspace link at your verified account email. Detailed
-                      business answers stay in your workspace.
-                    </p>
-                    <div className="button-row">
-                      <button
-                        className="btn btn-secondary btn-small"
-                        disabled={
-                          !!busy ||
-                          session?.reportEmailConfigured !== true ||
-                          [
-                            "queued",
-                            "sending",
-                            "bounced",
-                            "complained",
-                          ].includes(reportEmails[saved.id]?.[0]?.status ?? "")
-                        }
-                        onClick={() => requestReportEmail(saved)}
-                      >
-                        <Mail size={15} />
-                        {pendingEmailRequests.current[`${user.id}:${saved.id}`]
-                          ? "Retry same email request"
-                          : reportEmails[saved.id]?.[0]
-                            ? "Request this summary again"
-                            : "Email my next actions"}
-                      </button>
-                      <button
-                        className="quiet-button"
-                        disabled={!!busy}
-                        onClick={() => checkReportEmail(saved)}
-                      >
-                        Check email status
-                      </button>
-                    </div>
-                    {session?.reportEmailConfigured !== true && (
-                      <p className="fine-print">
-                        Report email is being configured. Your saved report and
-                        account export are available here.
-                      </p>
-                    )}
-                    {reportEmails[saved.id]?.slice(0, 3).map((request) => (
-                      <p className="fine-print" key={request.id} role="status">
-                        {new Date(request.requestedAt).toLocaleString()} ·{" "}
-                        {reportEmailLabel(request.status)}
-                        {["failed", "unavailable"].includes(request.status)
-                          ? ". You can explicitly request another summary when email sending is available."
-                          : ""}
-                      </p>
-                    ))}
-                  </div>
-                  {removeId === saved.id && (
-                    <div className="guide-note">
-                      <p className="fine-print">
-                        Remove this saved account report and its action
-                        progress? Your device copies are separate.
-                      </p>
-                      <button
-                        className="btn btn-danger btn-small"
-                        disabled={!!busy}
-                        onClick={() => removeReport(saved)}
-                      >
-                        Remove this account report
-                      </button>
-                      <button
-                        className="quiet-button"
-                        disabled={!!busy}
-                        onClick={() => setRemoveId(null)}
-                      >
-                        Keep report
-                      </button>
-                    </div>
-                  )}
-                  {saved.actionProgress.length > 0 && (
-                    <details>
-                      <summary className="text-link">
-                        Account action progress
-                      </summary>
-                      {saved.actionProgress.map((progress) => {
-                        const action = saved.snapshot.assessment.actions.find(
-                          (candidate) => candidate.id === progress.actionId,
-                        );
-                        return (
-                          <div className="guide-note" key={progress.actionId}>
-                            <strong>
-                              {action?.title ?? "Suggested action"}
-                            </strong>
-                            <ActionProgressControls
-                              state={progress.state}
-                              progress={progress.details}
-                              disabled={!!busy}
-                              outcomePrompt={action?.verification}
-                              onChange={(state, details) =>
-                                updateCloudAction(
-                                  saved,
-                                  progress,
-                                  state,
-                                  details,
-                                )
-                              }
-                            />
-                          </div>
-                        );
-                      })}
-                      <p className="fine-print">
-                        These are your reported progress states. Updating them
-                        does not change the assessment score.
-                      </p>
-                    </details>
-                  )}
-                  <WebsiteAIReview reportId={saved.id} />
-                </article>
-              ))
+                    <FirstImprovement
+                      key={`first-improvement-${user.id}`}
+                      reports={reports}
+                    />
+                  </WorkspaceTool>
+                  <WorkspaceTool
+                    target="action-outcome-tracking"
+                    title="Action implementation and tracking"
+                  >
+                    <ActionObservations
+                      key={`action-observations-${user.id}`}
+                      reports={reports}
+                    />
+                  </WorkspaceTool>
+                </WorkspaceArea>
+                <WorkspaceArea area="review" eager>
+                  <h2>Review progress</h2>
+                  <MonthlyPracticeBrief key={`monthly-brief-${user.id}`} />
+                </WorkspaceArea>
+                <WorkspaceArea area="review">
+                  <WorkspaceTool
+                    target="private-progress"
+                    title="Compare my reports and business periods"
+                  >
+                    <ProgressInsights
+                      key={`progress-insights-${user.id}`}
+                      reports={reports}
+                    />
+                  </WorkspaceTool>
+                  <WorkspaceTool
+                    target="outcome-plans"
+                    title="Manage future reporting plans"
+                  >
+                    <OutcomePlans
+                      key={`outcome-plans-${user.id}`}
+                      baselineReports={reports}
+                    />
+                  </WorkspaceTool>
+                  <WorkspaceTool
+                    target="outcome-reporting-reminders"
+                    title="Optional reporting reminders"
+                  >
+                    <OutcomeReminders key={`outcome-reminders-${user.id}`} />
+                  </WorkspaceTool>
+                </WorkspaceArea>
+              </>
             )}
-          </section>
-          <section
-            id="request-help"
-            className="guide-note"
-            aria-label="Request help from Pearl"
-          >
-            <h3>Want help with the business side?</h3>
-            <p className="fine-print">
-              Choose a need and ask Pearl to contact you. This preview records
-              your request for review; it does not book a call. Asking for help
-              never changes your grade or enrolls you in product marketing.
-            </p>
-            <form onSubmit={requestHelp}>
-              <div className="field-grid">
-                <label className="field-label" htmlFor={`${id}-help-topic`}>
-                  What would you like help with?
-                  <select
-                    id={`${id}-help-topic`}
-                    value={helpTopic}
-                    disabled={!!busy}
-                    onChange={(event) =>
-                      setHelpTopic(event.target.value as HelpTopic)
-                    }
-                  >
-                    {HELP_TOPICS.map((topic) => (
-                      <option key={topic} value={topic}>
-                        {HELP_TOPIC_LABELS[topic]}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="field-label" htmlFor={`${id}-help-report`}>
-                  Share a report summary (optional)
-                  <select
-                    id={`${id}-help-report`}
-                    value={helpReportId}
-                    disabled={!!busy}
-                    onChange={(event) => setHelpReportId(event.target.value)}
-                  >
-                    <option value="">Share no report summary</option>
-                    {reports.map((saved) => (
-                      <option key={saved.id} value={saved.id}>
-                        {saved.snapshot.label} ·{" "}
+            <WorkspaceArea area="data">
+              {!onImport && <h2>Reports and numbers</h2>}
+              <section
+                id="saved-account-reports"
+                aria-label="Saved account reports"
+              >
+                <h3>
+                  <Cloud size={19} /> Your saved reports
+                </h3>
+                {reports.length === 0 ? (
+                  <p className="muted">
+                    No account reports are shown yet. Open a report in the
+                    grader, then choose “Save selected report.”
+                  </p>
+                ) : (
+                  reports.map((saved) => (
+                    <article className="guide-note" key={saved.id}>
+                      <h3>{saved.snapshot.label}</h3>
+                      <p className="fine-print">
+                        Assessed{" "}
                         {new Date(
                           saved.snapshot.createdAt,
-                        ).toLocaleDateString()}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label className="preference">
-                <span>
-                  <strong>Contact me about this request</strong>
-                  <small>{HELP_CONSENT_TEXT}</small>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={helpConsent}
-                  disabled={!!busy}
-                  onChange={(event) => setHelpConsent(event.target.checked)}
-                />
-                <span
-                  className={`switch ${helpConsent ? "on" : ""}`}
-                  aria-hidden="true"
-                >
-                  <span />
-                </span>
-              </label>
-              <button
-                className="btn btn-primary"
-                type="submit"
-                disabled={!!busy || !helpConsent}
-              >
-                Record my contact request <ArrowRight size={16} />
-              </button>
-            </form>
-            <button
-              className="text-link"
-              disabled={!!busy}
-              onClick={() =>
-                void perform("Loading your contact requests", loadHelpRequests)
-              }
-            >
-              View or refresh my contact requests
-            </button>
-            {helpRequests !== null &&
-              (helpRequests.length === 0 ? (
-                <p className="fine-print">
-                  You have no recorded contact requests.
-                </p>
-              ) : (
-                <div>
-                  {helpRequests.slice(0, 10).map((request) => (
-                    <article className="guide-note" key={request.id}>
-                      <strong>{HELP_TOPIC_LABELS[request.topic]}</strong>
-                      <p className="fine-print">
-                        {new Date(request.createdAt).toLocaleString()} ·{" "}
-                        {request.status === "open"
-                          ? "Awaiting review"
-                          : request.status === "in_review"
-                            ? "Under review"
-                            : request.status === "contacted"
-                              ? "Follow-up recorded"
-                              : request.status === "closed"
-                                ? "Closed"
-                                : "Withdrawn"}
+                        ).toLocaleDateString()}{" "}
+                        · {saved.snapshot.assessment.releaseSnapshot.label} ·
+                        Private
                       </p>
-                      {request.contactConsent &&
-                        request.status !== "withdrawn" && (
+                      <p className="fine-print">
+                        Device copies have their own progress. The account
+                        progress below is available across your signed-in
+                        devices.
+                      </p>
+                      {deviceConflicts.includes(saved.id) && (
+                        <div className="guide-note">
+                          <strong>Device and account progress differ</strong>
+                          <p className="fine-print">
+                            Keep the current device progress, or use the account
+                            action states and dates when you open this report.
+                          </p>
+                          <label
+                            className="account-progress-choice"
+                            htmlFor={`${id}-${saved.id}-account-progress`}
+                          >
+                            <input
+                              id={`${id}-${saved.id}-account-progress`}
+                              type="checkbox"
+                              checked={
+                                accountProgressChoices[saved.id] === true
+                              }
+                              disabled={!!busy}
+                              onChange={(event) =>
+                                setAccountProgressChoices((previous) => ({
+                                  ...previous,
+                                  [saved.id]: event.target.checked,
+                                }))
+                              }
+                            />
+                            <span>
+                              Use account progress for this report on this
+                              device
+                            </span>
+                          </label>
+                        </div>
+                      )}
+                      <div className="button-row">
+                        <button
+                          className="btn btn-secondary btn-small"
+                          disabled={!!busy}
+                          onClick={() => openReport(saved)}
+                        >
+                          Open on this device <ArrowRight size={15} />
+                        </button>
+                        <button
+                          className="quiet-button danger"
+                          disabled={!!busy}
+                          onClick={() =>
+                            setRemoveId(removeId === saved.id ? null : saved.id)
+                          }
+                        >
+                          <Trash2 size={14} />
+                          Remove account copy
+                        </button>
+                      </div>
+                      <div
+                        className="guide-note"
+                        aria-label="Requested report email"
+                      >
+                        <strong>A short summary in your inbox</strong>
+                        <p className="fine-print">
+                          Request the assessment date, next actions and a
+                          private workspace link at your verified account email.
+                          Detailed business answers stay in your workspace.
+                        </p>
+                        <div className="button-row">
+                          <button
+                            className="btn btn-secondary btn-small"
+                            disabled={
+                              !!busy ||
+                              session?.reportEmailConfigured !== true ||
+                              [
+                                "queued",
+                                "sending",
+                                "bounced",
+                                "complained",
+                              ].includes(
+                                reportEmails[saved.id]?.[0]?.status ?? "",
+                              )
+                            }
+                            onClick={() => requestReportEmail(saved)}
+                          >
+                            <Mail size={15} />
+                            {pendingEmailRequests.current[
+                              `${user.id}:${saved.id}`
+                            ]
+                              ? "Retry same email request"
+                              : reportEmails[saved.id]?.[0]
+                                ? "Request this summary again"
+                                : "Email my next actions"}
+                          </button>
                           <button
                             className="quiet-button"
                             disabled={!!busy}
-                            onClick={() => withdrawHelp(request)}
+                            onClick={() => checkReportEmail(saved)}
                           >
-                            Withdraw contact request
+                            Check email status
                           </button>
+                        </div>
+                        {session?.reportEmailConfigured !== true && (
+                          <p className="fine-print">
+                            Report email is being configured. Your saved report
+                            and account export are available here.
+                          </p>
                         )}
+                        {reportEmails[saved.id]?.slice(0, 3).map((request) => (
+                          <p
+                            className="fine-print"
+                            key={request.id}
+                            role="status"
+                          >
+                            {new Date(request.requestedAt).toLocaleString()} ·{" "}
+                            {reportEmailLabel(request.status)}
+                            {["failed", "unavailable"].includes(request.status)
+                              ? ". You can explicitly request another summary when email sending is available."
+                              : ""}
+                          </p>
+                        ))}
+                      </div>
+                      {removeId === saved.id && (
+                        <div className="guide-note">
+                          <p className="fine-print">
+                            Remove this saved account report and its action
+                            progress? Your device copies are separate.
+                          </p>
+                          <button
+                            className="btn btn-danger btn-small"
+                            disabled={!!busy}
+                            onClick={() => removeReport(saved)}
+                          >
+                            Remove this account report
+                          </button>
+                          <button
+                            className="quiet-button"
+                            disabled={!!busy}
+                            onClick={() => setRemoveId(null)}
+                          >
+                            Keep report
+                          </button>
+                        </div>
+                      )}
+                      {saved.actionProgress.length > 0 && (
+                        <details>
+                          <summary className="text-link">
+                            Account action progress
+                          </summary>
+                          {saved.actionProgress.map((progress) => {
+                            const action =
+                              saved.snapshot.assessment.actions.find(
+                                (candidate) =>
+                                  candidate.id === progress.actionId,
+                              );
+                            return (
+                              <div
+                                className="guide-note"
+                                key={progress.actionId}
+                              >
+                                <strong>
+                                  {action?.title ?? "Suggested action"}
+                                </strong>
+                                <ActionProgressControls
+                                  state={progress.state}
+                                  progress={progress.details}
+                                  disabled={!!busy}
+                                  outcomePrompt={action?.verification}
+                                  onChange={(state, details) =>
+                                    updateCloudAction(
+                                      saved,
+                                      progress,
+                                      state,
+                                      details,
+                                    )
+                                  }
+                                />
+                              </div>
+                            );
+                          })}
+                          <p className="fine-print">
+                            These are your reported progress states. Updating
+                            them does not change the assessment score.
+                          </p>
+                        </details>
+                      )}
+                      <WebsiteAIReview reportId={saved.id} />
                     </article>
-                  ))}
-                </div>
-              ))}
-          </section>
-          {preferences && (
-            <section aria-label="Account choices">
-              <h3>Your account choices</h3>
-              <p className="fine-print">
-                These are separate choices, not requirements for using the
-                grader. Device-only interest settings are never copied into
-                account consent. The action-reminder choice records interest
-                while that feature is being built. Use the separate controls
-                below for reporting reminders, an anonymous leaderboard entry or
-                the weekly email series.
-              </p>
-              <div className="preference-list">
-                {(
-                  Object.keys(
-                    preferenceLabels,
-                  ) as (keyof AccountPreferenceValues)[]
-                ).map((key) => (
-                  <label className="preference" key={key}>
-                    <span>
-                      <strong>{preferenceLabels[key]}</strong>
-                      <small>
-                        {key === "marketing" && preferenceDraft.marketing
-                          ? "Email is enabled for the permissions you explicitly granted. Joining the course permits only its four lessons. Turn this off to stop all grader marketing."
-                          : ACCOUNT_CONSENT_TEXT[key]}
-                      </small>
-                    </span>
-                    <input
-                      type="checkbox"
-                      checked={preferenceDraft[key]}
-                      disabled={!!busy}
-                      onChange={(event) =>
-                        setPreferenceDraft((previous) => ({
-                          ...previous,
-                          [key]: event.target.checked,
-                        }))
-                      }
+                  ))
+                )}
+              </section>
+              {!onImport && (
+                <>
+                  <WorkspaceTool
+                    target="business-outcomes"
+                    title="Report or correct business figures"
+                  >
+                    <OutcomeTracker
+                      key={`outcomes-${user.id}`}
+                      baselineReports={reports}
                     />
-                    <span
-                      className={`switch ${preferenceDraft[key] ? "on" : ""}`}
-                      aria-hidden="true"
-                    >
-                      <span />
-                    </span>
-                  </label>
-                ))}
-              </div>
-              <p className="fine-print">
-                Your choice is recorded with its date and wording. Withdraw it
-                by turning it off and saving. Already published aggregate
-                statistics may not be reversible; your private answers and
-                practice identity are not published by these choices.
-              </p>
-              <p className="fine-print">
-                Requesting the four-part course permits only those lessons, not
-                general product news or offers. Stopping marketing here also
-                stops the course. Its separate enrollment never starts again
-                just because an email preference is turned on.
-              </p>
-              <button
-                className="btn btn-secondary"
-                disabled={!!busy || !prefsChanged}
-                onClick={savePreferences}
-              >
-                Save these choices
-              </button>
-            </section>
-          )}
-          <LeaderboardEnrollment
-            key={`leaderboard-${user.id}`}
-            reports={reports}
-          />
-          <OutcomeTracker
-            key={`outcomes-${user.id}`}
-            baselineReports={reports}
-          />
-          <OutcomeImportWizard key={`outcome-imports-${user.id}`} />
-          <DataIntegrations key={`data-integrations-${user.id}`} />
-          <ProgressInsights
-            key={`progress-insights-${user.id}`}
-            reports={reports}
-          />
-          <PersonalizedActions
-            key={`personalized-actions-${user.id}`}
-            reports={reports}
-            onReportsChanged={() => loadPrivate()}
-          />
-          <OutcomePlans
-            key={`outcome-plans-${user.id}`}
-            baselineReports={reports}
-          />
-          <ActionObservations
-            key={`action-observations-${user.id}`}
-            reports={reports}
-          />
-          <OutcomeReminders key={`outcome-reminders-${user.id}`} />
-          <NurtureEnrollment
-            key={`learning-${user.id}-${preferences?.revision ?? 0}`}
-            onPreferencesChanged={() => loadPrivate()}
-          />
-          <div className="dialog-data-actions">
-            <button
-              className="btn btn-secondary"
-              disabled={!!busy}
-              onClick={exportAccount}
-            >
-              <Download size={16} />
-              Download account data
-            </button>
-            <p className="fine-print">
-              Account data and device data have separate copies. Removing one
-              does not remove the other.
-            </p>
-          </div>
-          <details>
-            <summary className="text-link danger">Delete my account</summary>
-            <p className="fine-print">
-              This deletes your email sign-in account and its private reports,
-              action progress, explanations, preferences, leaderboard entry,
-              email-series enrollment, outcome records, reporting plans,
-              reporting-reminder preferences and contact requests. Download an
-              account export first if you want a copy. Device copies remain
-              separate. Shared public website checks expire after 30 days;
-              provider logs and backups follow their own retention. Hashed
-              abuse-prevention counters expire after their separate 48-hour
-              window.
-            </p>
-            <p className="fine-print">
-              A recent sign-in is required. If your sign-in is older than 15
-              minutes, sign out and request a new code before deleting.
-            </p>
-            <form onSubmit={deleteWorkspace}>
-              <label className="field-label" htmlFor={`${id}-delete`}>
-                Type DELETE MY ACCOUNT to confirm
-                <input
-                  id={`${id}-delete`}
-                  autoComplete="off"
-                  value={deleteConfirmation}
-                  disabled={!!busy}
-                  onChange={(event) =>
-                    setDeleteConfirmation(event.target.value)
-                  }
+                  </WorkspaceTool>
+                  <WorkspaceTool
+                    target="import-business-outcomes"
+                    title="Import several business periods"
+                  >
+                    <OutcomeImportWizard key={`outcome-imports-${user.id}`} />
+                  </WorkspaceTool>
+                  <WorkspaceTool
+                    target="data-integrations"
+                    title="Connect an aggregate data delivery"
+                  >
+                    <DataIntegrations key={`data-integrations-${user.id}`} />
+                  </WorkspaceTool>
+                </>
+              )}
+            </WorkspaceArea>
+            {!onImport && (
+              <WorkspaceArea area="learning">
+                <NurtureEnrollment
+                  key={`learning-${user.id}-${preferences?.revision ?? 0}`}
+                  onPreferencesChanged={() => loadPrivate()}
                 />
-              </label>
-              <button
-                className="btn btn-danger"
-                type="submit"
-                disabled={!!busy || deleteConfirmation !== "DELETE MY ACCOUNT"}
-              >
-                Delete my account and private data
-              </button>
-            </form>
-          </details>
+                <WorkspaceTool
+                  target="readiness-leaderboard"
+                  title="Optional readiness leaderboard"
+                >
+                  <div id="readiness-leaderboard">
+                    <LeaderboardEnrollment
+                      key={`leaderboard-${user.id}`}
+                      reports={reports}
+                    />
+                  </div>
+                </WorkspaceTool>
+                <WorkspaceTool
+                  target="first-improvement-pilot"
+                  title="Optional feedback pilot"
+                >
+                  <PilotParticipation key={`pilot-participation-${user.id}`} />
+                </WorkspaceTool>
+              </WorkspaceArea>
+            )}
+            {!onImport && (
+              <WorkspaceArea area="settings">
+                <h2>Settings and help</h2>
+                <section
+                  id="request-help"
+                  className="guide-note"
+                  aria-label="Request help from Pearl"
+                >
+                  <h3>Want help with the business side?</h3>
+                  <p className="fine-print">
+                    Choose a need and ask Pearl to contact you. This preview
+                    records your request for review; it does not book a call.
+                    Asking for help never changes your grade or enrolls you in
+                    product marketing.
+                  </p>
+                  <form onSubmit={requestHelp}>
+                    <div className="field-grid">
+                      <label
+                        className="field-label"
+                        htmlFor={`${id}-help-topic`}
+                      >
+                        What would you like help with?
+                        <select
+                          id={`${id}-help-topic`}
+                          value={helpTopic}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            setHelpTopic(event.target.value as HelpTopic)
+                          }
+                        >
+                          {HELP_TOPICS.map((topic) => (
+                            <option key={topic} value={topic}>
+                              {HELP_TOPIC_LABELS[topic]}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label
+                        className="field-label"
+                        htmlFor={`${id}-help-report`}
+                      >
+                        Share a report summary (optional)
+                        <select
+                          id={`${id}-help-report`}
+                          value={helpReportId}
+                          disabled={!!busy}
+                          onChange={(event) =>
+                            setHelpReportId(event.target.value)
+                          }
+                        >
+                          <option value="">Share no report summary</option>
+                          {reports.map((saved) => (
+                            <option key={saved.id} value={saved.id}>
+                              {saved.snapshot.label} ·{" "}
+                              {new Date(
+                                saved.snapshot.createdAt,
+                              ).toLocaleDateString()}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <label className="preference">
+                      <span>
+                        <strong>Contact me about this request</strong>
+                        <small>{HELP_CONSENT_TEXT}</small>
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={helpConsent}
+                        disabled={!!busy}
+                        onChange={(event) =>
+                          setHelpConsent(event.target.checked)
+                        }
+                      />
+                      <span
+                        className={`switch ${helpConsent ? "on" : ""}`}
+                        aria-hidden="true"
+                      >
+                        <span />
+                      </span>
+                    </label>
+                    <button
+                      className="btn btn-primary"
+                      type="submit"
+                      disabled={!!busy || !helpConsent}
+                    >
+                      Record my contact request <ArrowRight size={16} />
+                    </button>
+                  </form>
+                  <button
+                    className="text-link"
+                    disabled={!!busy}
+                    onClick={() =>
+                      void perform(
+                        "Loading your contact requests",
+                        loadHelpRequests,
+                      )
+                    }
+                  >
+                    View or refresh my contact requests
+                  </button>
+                  {helpRequests !== null &&
+                    (helpRequests.length === 0 ? (
+                      <p className="fine-print">
+                        You have no recorded contact requests.
+                      </p>
+                    ) : (
+                      <div>
+                        {helpRequests.slice(0, 10).map((request) => (
+                          <article className="guide-note" key={request.id}>
+                            <strong>{HELP_TOPIC_LABELS[request.topic]}</strong>
+                            <p className="fine-print">
+                              {new Date(request.createdAt).toLocaleString()} ·{" "}
+                              {request.status === "open"
+                                ? "Awaiting review"
+                                : request.status === "in_review"
+                                  ? "Under review"
+                                  : request.status === "contacted"
+                                    ? "Follow-up recorded"
+                                    : request.status === "closed"
+                                      ? "Closed"
+                                      : "Withdrawn"}
+                            </p>
+                            {request.contactConsent &&
+                              request.status !== "withdrawn" && (
+                                <button
+                                  className="quiet-button"
+                                  disabled={!!busy}
+                                  onClick={() => withdrawHelp(request)}
+                                >
+                                  Withdraw contact request
+                                </button>
+                              )}
+                          </article>
+                        ))}
+                      </div>
+                    ))}
+                </section>
+                {preferences && (
+                  <section id="account-choices" aria-label="Account choices">
+                    <h3>Your account choices</h3>
+                    <p className="fine-print">
+                      Choose whether Pearl may send marketing or use your
+                      reports in private aggregate research. You can manage
+                      reporting reminders, the weekly lessons and the readiness
+                      leaderboard in their own tools.
+                    </p>
+                    <div className="preference-list">
+                      {(
+                        [
+                          "marketing",
+                          "benchmarking",
+                        ] as (keyof AccountPreferenceValues)[]
+                      ).map((key) => (
+                        <label className="preference" key={key}>
+                          <span>
+                            <strong>{preferenceLabels[key]}</strong>
+                            <small>
+                              {key === "marketing" && preferenceDraft.marketing
+                                ? "Email is enabled for the permissions you explicitly granted. Joining the course permits only its four lessons. Turn this off to stop all grader marketing."
+                                : ACCOUNT_CONSENT_TEXT[key]}
+                            </small>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={preferenceDraft[key]}
+                            disabled={!!busy}
+                            onChange={(event) =>
+                              setPreferenceDraft((previous) => ({
+                                ...previous,
+                                [key]: event.target.checked,
+                              }))
+                            }
+                          />
+                          <span
+                            className={`switch ${preferenceDraft[key] ? "on" : ""}`}
+                            aria-hidden="true"
+                          >
+                            <span />
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    {(["reminders", "leaderboard"] as const).some(
+                      (key) => preferences.values[key],
+                    ) && (
+                      <details className="workspace-tool">
+                        <summary>Earlier interest choices</summary>
+                        <p className="fine-print">
+                          You previously saved interest in these features. Clear
+                          an earlier choice here, then save. Use the feature's
+                          own controls to manage its current enrollment.
+                        </p>
+                        {(["reminders", "leaderboard"] as const)
+                          .filter((key) => preferences.values[key])
+                          .map((key) => (
+                            <label className="preference" key={key}>
+                              <span>
+                                <strong>{preferenceLabels[key]}</strong>
+                                <small>{ACCOUNT_CONSENT_TEXT[key]}</small>
+                              </span>
+                              <input
+                                type="checkbox"
+                                checked={preferenceDraft[key]}
+                                disabled={!!busy}
+                                onChange={(event) =>
+                                  setPreferenceDraft((previous) => ({
+                                    ...previous,
+                                    [key]: event.target.checked,
+                                  }))
+                                }
+                              />
+                            </label>
+                          ))}
+                      </details>
+                    )}
+                    <p className="fine-print">
+                      Your choice is recorded with its date and wording.
+                      Withdraw it by turning it off and saving. Already
+                      published aggregate statistics may not be reversible; your
+                      private answers and practice identity are not published by
+                      these choices.
+                    </p>
+                    <p className="fine-print">
+                      Requesting the four-part course permits only those
+                      lessons, not general product news or offers. Stopping
+                      marketing here also stops the course. Its separate
+                      enrollment never starts again just because an email
+                      preference is turned on.
+                    </p>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={!!busy || !prefsChanged}
+                      onClick={savePreferences}
+                    >
+                      Save these choices
+                    </button>
+                  </section>
+                )}
+                <div id="account-data" className="dialog-data-actions">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={!!busy}
+                    onClick={exportAccount}
+                  >
+                    <Download size={16} />
+                    Download account data
+                  </button>
+                  <p className="fine-print">
+                    Account data and device data have separate copies. Removing
+                    one does not remove the other.
+                  </p>
+                </div>
+                <details>
+                  <summary className="text-link danger">
+                    Delete my account
+                  </summary>
+                  <p className="fine-print">
+                    This deletes your email sign-in account and its private
+                    reports, action progress, explanations, preferences,
+                    leaderboard entry, email-series enrollment, outcome records,
+                    reporting plans, reporting-reminder preferences and contact
+                    requests. Download an account export first if you want a
+                    copy. Device copies remain separate. Shared public website
+                    checks expire after 30 days; provider logs and backups
+                    follow their own retention. Hashed abuse-prevention counters
+                    expire after their separate 48-hour window.
+                  </p>
+                  <p className="fine-print">
+                    A recent sign-in is required. If your sign-in is older than
+                    15 minutes, sign out and request a new code before deleting.
+                  </p>
+                  <form onSubmit={deleteWorkspace}>
+                    <label className="field-label" htmlFor={`${id}-delete`}>
+                      Type DELETE MY ACCOUNT to confirm
+                      <input
+                        id={`${id}-delete`}
+                        autoComplete="off"
+                        value={deleteConfirmation}
+                        disabled={!!busy}
+                        onChange={(event) =>
+                          setDeleteConfirmation(event.target.value)
+                        }
+                      />
+                    </label>
+                    <button
+                      className="btn btn-danger"
+                      type="submit"
+                      disabled={
+                        !!busy || deleteConfirmation !== "DELETE MY ACCOUNT"
+                      }
+                    >
+                      Delete my account and private data
+                    </button>
+                  </form>
+                </details>
+              </WorkspaceArea>
+            )}
+          </AccountWorkspace>
+          {onImport && (
+            <p className="fine-print">
+              <a href="/account">Open my full workspace</a> for action tracking,
+              business figures, email choices and account data.
+            </p>
+          )}
         </>
       )}
       <div className="button-row">
@@ -1576,11 +1845,6 @@ export default function AccountPanel({
           <RefreshCw size={15} />
           Refresh account
         </button>
-        {!onImport && (
-          <a className="text-link" href="/">
-            Return to the grader <ArrowRight size={15} />
-          </a>
-        )}
       </div>
     </div>
   );

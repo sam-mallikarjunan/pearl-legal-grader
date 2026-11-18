@@ -1,6 +1,7 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
 import {
+  BENCHMARK_REVIEWED_AT,
   calculateCashLockup,
   calculateFunnel,
   INDUSTRY_BENCHMARKS,
@@ -226,7 +227,7 @@ test("reference catalog preserves sources, unknown denominators, observed/guidan
   assert.equal(new Set(INDUSTRY_BENCHMARKS.map((b) => b.id)).size, 12);
   for (const b of INDUSTRY_BENCHMARKS) {
     assert.equal(new URL(b.source.url).protocol, "https:");
-    assert.equal(b.source.accessedAt, "2026-10-19");
+    assert.equal(b.source.accessedAt, BENCHMARK_REVIEWED_AT);
     for (const value of [
       b.unit,
       b.cohort,
@@ -245,7 +246,28 @@ test("reference catalog preserves sources, unknown denominators, observed/guidan
   assert.equal(
     INDUSTRY_BENCHMARKS.find(
       (b) => b.id === "total-lockup",
-    )?.limitation.includes("median"),
+    )?.limitation.includes("12-month rolling average"),
     true,
   );
+});
+
+test("cash references retain the verified 2025 figures and link to exact PDF locations", () => {
+  for (const [id, value] of [
+    ["utilization", "38%"],
+    ["realization", "88%"],
+    ["collection", "93%"],
+  ]) {
+    const reference = INDUSTRY_BENCHMARKS.find((item) => item.id === id)!;
+    assert.equal(reference.displayValue, value);
+    assert.equal(
+      reference.source.url,
+      "https://www.clio.com/wp-content/uploads/2025/09/2025-Legal-Trends-Report.pdf#page=62",
+    );
+    assert.match(reference.source.locator!, /122–123/);
+    assert.match(reference.source.locator!, /138/);
+  }
+  const lockup = INDUSTRY_BENCHMARKS.find((item) => item.id === "total-lockup")!;
+  assert.equal(lockup.displayValue, "About 93 days");
+  assert.equal(new URL(lockup.source.url).hash, "#page=64");
+  assert.match(lockup.source.locator!, /12-month rolling average/);
 });

@@ -1,6 +1,6 @@
 /** Editorial reference data, deliberately separate from the scoring rubric. */
-export const BENCHMARK_CATALOG_VERSION = "industry-reference-2026-10-19-v1";
-export const BENCHMARK_REVIEWED_AT = "2026-10-19";
+export const BENCHMARK_CATALOG_VERSION = "industry-reference-2026-11-18-v2";
+export const BENCHMARK_REVIEWED_AT = "2026-11-18";
 export const BENCHMARK_CATEGORIES = [
   "Intake",
   "Cash flow",
@@ -26,16 +26,30 @@ export interface IndustryBenchmark {
     | "Secret-shop observations"
     | "Survey responses"
     | "Technical guidance";
-  source: { title: string; url: string; accessedAt: string };
+  source: {
+    title: string;
+    url: string;
+    accessedAt: string;
+    locator?: string;
+  };
 }
-const source = (title: string, url: string) => ({
+const source = (title: string, url: string, locator?: string) => ({
   title,
   url,
   accessedAt: BENCHMARK_REVIEWED_AT,
+  ...(locator ? { locator } : {}),
 });
+const clio2025Pdf =
+  "https://www.clio.com/wp-content/uploads/2025/09/2025-Legal-Trends-Report.pdf";
 const clioKpi = source(
-  "Clio · 2025 Legal Trends Report, Appendices A and B",
-  "https://www.clio.com/resources/legal-trends/read-online/",
+  "Clio · 2025 Legal Trends Report, Appendix A",
+  `${clio2025Pdf}#page=62`,
+  "Printed pages 122–123 (PDF page 62), key performance indicators. Sample methodology on printed page 138 (PDF page 70).",
+);
+const clioLockup = source(
+  "Clio · 2025 Legal Trends Report, Appendix A",
+  `${clio2025Pdf}#page=64`,
+  "Printed page 126 (PDF page 64), lockup. The chart uses a 12-month rolling average. Sample methodology on printed page 138 (PDF page 70).",
 );
 const intake = source(
   "Clio · 2024 Legal Trends Report highlights and methodology",
@@ -52,7 +66,7 @@ const soloAi = source(
 const kpiCohort =
   "U.S. paid Clio subscribers; anonymized platform data. Opt-outs and statistical outliers excluded.";
 const kpiPeriod =
-  "2025 report edition; the linked KPI summary does not state the exact observation cutoff.";
+  "2025 report edition. Appendix A does not give one exact observation cutoff for every displayed KPI.";
 const kpiLimitation =
   "Vendor-customer sample, not all firms. Hourly-work measures may fit flat-fee, contingency, or early-stage practices poorly.";
 const shopCohort =
@@ -175,11 +189,11 @@ export const INDUSTRY_BENCHMARKS: readonly IndustryBenchmark[] = [
     denominator:
       "A cash-flow stock expressed in days of work; not an average invoice's age or days to payment.",
     limitation:
-      "The online summary calls this about 93 days; it does not identify the aggregation statistic. Do not relabel it as a median or DSO.",
+      "Appendix A describes about 93 days and plots a 12-month rolling average. The sample and stock-based calculation can differ from your own invoice collection measure.",
     nextAction:
       "Track unbilled work and unpaid invoices separately. Use a consistent annual-collections basis in the calculator below.",
     evidence: "Platform observations",
-    source: clioKpi,
+    source: clioLockup,
   },
   {
     id: "lcp",

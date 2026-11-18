@@ -364,3 +364,49 @@
     gap: 22px;
   }
 }
+
+.benchmark-comparison-details {
+  margin-top: 20px;
+  padding-block: 15px;
+  border-block: 1px solid var(--line);
+}
+.benchmark-comparison-details > summary {
+  padding-block: 10px;
+}
+.benchmark-comparison-details .benchmark-peer {
+  margin-top: 15px;
+}
+.benchmark-starting-note {
+  margin-block: 0 22px;
+  max-width: 760px;
+}
+.benchmark-library-toggle {
+  margin-bottom: 24px;
+}
+.benchmark-page .benchmark-unit,
+.benchmark-page .benchmark-source,
+.benchmark-page .benchmark-card-tags,
+.benchmark-page .benchmark-next .eyebrow,
+.benchmark-page .benchmark-brand span,
+.benchmark-page .benchmark-peer-grid small {
+  font-size: 0.8125rem;
+}
+.benchmark-page .benchmark-reference > p,
+.benchmark-page .benchmark-next p,
+.benchmark-page .benchmark-reference dl,
+.benchmark-page .benchmark-results,
+.benchmark-page label > span {
+  font-size: 0.875rem;
+}
+@media (max-width: 650px) {
+  .benchmark-nav {
+    flex-wrap: wrap;
+    padding-block: 18px;
+  }
+  .benchmark-nav .btn {
+    font-size: 0.875rem;
+  }
+  .benchmark-hero {
+    padding-top: 30px;
+  }
+}

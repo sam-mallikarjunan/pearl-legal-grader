@@ -37,6 +37,7 @@ export default function OutcomePlans({
     currency: "USD",
   }));
   const [requestId, setRequestId] = useState("");
+  const [withdrawId, setWithdrawId] = useState<string | null>(null);
   const load = useCallback(async () => {
     try {
       const [p, c] = await Promise.all([
@@ -111,6 +112,7 @@ export default function OutcomePlans({
     }
   }
   async function withdraw(plan: OutcomePlan) {
+    if (busy || withdrawId !== plan.id) return;
     setBusy(true);
     try {
       const response = await fetch(`/api/account/outcome-plans/${plan.id}`, {
@@ -132,6 +134,7 @@ export default function OutcomePlans({
       );
       await load();
     } finally {
+      setWithdrawId(null);
       setBusy(false);
     }
   }
@@ -279,17 +282,57 @@ export default function OutcomePlans({
                   ? "This plan is closed permanently."
                   : "Dates, source, currency and baseline are locked. Use the business-period form to report or correct numbers."}
               </p>
-              {plan.status !== "withdrawn" && (
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  disabled={busy}
-                  onClick={() => void withdraw(plan)}
-                  aria-label={`Withdraw plan ${plan.startDate} to ${plan.endDate}`}
-                >
-                  Withdraw plan
-                </button>
-              )}
+              {plan.status !== "withdrawn" &&
+                (withdrawId === plan.id ? (
+                  <div
+                    className="guide-note"
+                    role="group"
+                    aria-label="Confirm plan withdrawal"
+                  >
+                    <p>
+                      Withdraw this plan permanently? Its linked action
+                      comparison will become unavailable. Saved business figures
+                      stay in your private history.
+                    </p>
+                    <div className="button-row">
+                      <button
+                        type="button"
+                        className="btn btn-danger"
+                        disabled={busy}
+                        onClick={() => void withdraw(plan)}
+                        aria-label={`Confirm withdraw plan ${plan.startDate} to ${plan.endDate}`}
+                      >
+                        Confirm withdrawal
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        disabled={busy}
+                        onClick={() => {
+                          setWithdrawId(null);
+                          requestAnimationFrame(() =>
+                            document
+                              .getElementById(`${id}-${plan.id}-withdraw`)
+                              ?.focus(),
+                          );
+                        }}
+                      >
+                        Keep this plan
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    id={`${id}-${plan.id}-withdraw`}
+                    type="button"
+                    className="btn btn-secondary"
+                    disabled={busy}
+                    onClick={() => setWithdrawId(plan.id)}
+                    aria-label={`Withdraw plan ${plan.startDate} to ${plan.endDate}`}
+                  >
+                    Withdraw plan
+                  </button>
+                ))}
             </article>
           ))
         )}

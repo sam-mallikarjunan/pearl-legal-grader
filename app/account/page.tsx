@@ -13,15 +13,12 @@ export default async function AccountPage({
 }) {
   const next = (await searchParams).next;
   return (
-    <main className="page-width progress-page">
+    <main className="page-width progress-page account-page">
       <div className="page-heading">
         <div>
           <p className="eyebrow">YOUR PRIVATE WORKSPACE</p>
-          <h1>Keep your progress with you.</h1>
-          <p>
-            Save selected assessments, return from another device and choose how
-            your data is used.
-          </p>
+          <h1>Your practice workspace</h1>
+          <p>Work on your next action and review your progress.</p>
         </div>
       </div>
       <section className="card">

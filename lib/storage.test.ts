@@ -516,3 +516,83 @@ test("bounded report retention removes progress for reports or actions no longer
   assert.deepEqual(retainActionProgress(progress, []), {});
   assert.deepEqual(retainActionProgress(undefined, store.assessments), {});
 });
+
+test("adding the 31st device report preserves older reports and progress", async () => {
+  const { appendLocalAssessment } = await import("./storage");
+  const base = savedStore();
+  const original = base.assessments[0];
+  const history = Array.from({ length: 30 }, (_, index) => ({
+    ...structuredClone(original),
+    id: `report-${index}`,
+  }));
+  const before = structuredClone(history);
+  const incoming = { ...structuredClone(original), id: "new-report" };
+  const result = appendLocalAssessment(history, incoming);
+  assert.equal(result.length, 31);
+  assert.deepEqual(result.slice(1), before);
+  assert.deepEqual(history, before);
+});
+
+test("device history capacity rejects the 41st report and permits reopening existing reports", async () => {
+  const { appendLocalAssessment, LOCAL_ASSESSMENT_LIMIT } = await import(
+    "./storage"
+  );
+  const original = savedStore().assessments[0];
+  const history = Array.from(
+    { length: LOCAL_ASSESSMENT_LIMIT },
+    (_, index) => ({ ...structuredClone(original), id: `report-${index}` }),
+  );
+  const before = structuredClone(history);
+  assert.throws(
+    () => appendLocalAssessment(history, { ...original, id: "overflow" }),
+    /40 saved reports/,
+  );
+  assert.deepEqual(history, before);
+  assert.equal(appendLocalAssessment(history, history[17]), history);
+});
+
+test("an unfinished assessment preserves its exact release, answers and step", async () => {
+  const { parseAssessmentDraft } = await import("./storage");
+  const draft = {
+    version: 1,
+    updatedAt: "2026-11-18T18:00:00.000Z",
+    context: SAMPLE_CONTEXT,
+    answers: SAMPLE_ANSWERS,
+    controls: SAMPLE_CONTROLS,
+    release: DEFAULT_RELEASE,
+    practiceId: "draft-practice",
+    baselineId: null,
+    module: "cash",
+    step: 2,
+    isSample: false,
+  };
+  assert.deepEqual(parseAssessmentDraft(JSON.stringify(draft)), draft);
+  assert.equal(
+    parseAssessmentDraft(
+      JSON.stringify({ ...draft, answers: { alien: "reviewed" } }),
+    ),
+    null,
+  );
+  assert.equal(
+    parseAssessmentDraft(JSON.stringify({ ...draft, step: 3 })),
+    null,
+  );
+  assert.equal(
+    parseAssessmentDraft(
+      JSON.stringify({
+        ...draft,
+        context: { ...SAMPLE_CONTEXT, stage: "invalid" },
+      }),
+    ),
+    null,
+  );
+  assert.equal(
+    parseAssessmentDraft(
+      JSON.stringify({
+        ...draft,
+        release: { ...DEFAULT_RELEASE, minCoverage: 0 },
+      }),
+    ),
+    null,
+  );
+});

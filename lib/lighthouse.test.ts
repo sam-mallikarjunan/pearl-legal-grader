@@ -274,6 +274,70 @@ test("only an explicit provider stale-snapshot response permits a single cold fa
   assert.equal(sandbox.events.at(-1), "stop");
 });
 
+test("the provider's current expired snapshot response recovers once from a fresh runtime", async () => {
+  const expired = {
+    response: { status: 410 },
+    json: {
+      error: {
+        code: "bad_request",
+        message: "Snapshot expired or deleted.",
+      },
+    },
+  };
+  assert.equal(isExpiredLighthouseSnapshot(expired), true);
+  assert.equal(
+    isExpiredLighthouseSnapshot({
+      response: { status: 410 },
+      json: { error: { code: "bad_request", message: "Another bad request." } },
+    }),
+    false,
+  );
+  assert.equal(
+    isExpiredLighthouseSnapshot({
+      ...expired,
+      response: { status: 403 },
+    }),
+    false,
+  );
+  const options: LighthouseSandboxOptions[] = [];
+  const sandbox = fakeSandbox();
+  const runner = createSandboxLighthouseRunner(
+    async (value) => {
+      options.push(value);
+      if (options.length === 1) throw expired;
+      return sandbox;
+    },
+    validate,
+    "snap_expired",
+  );
+  assert.equal((await runner(url)).status, "available");
+  assert.equal(options.length, 2);
+  assert.equal(options[0].source?.snapshotId, "snap_expired");
+  assert.equal(options[1].image, "vercel/sandbox/node:24");
+  assert.ok(sandbox.events.includes("command:npm"));
+  assert.equal(sandbox.events.at(-1), "stop");
+});
+
+test("worker failures expose a safe stage without the provider's secret details", async () => {
+  const diagnostics: unknown[] = [];
+  const sandbox = fakeSandbox({ failingCommand: 3 });
+  const runner = createSandboxLighthouseRunner(
+    async () => sandbox,
+    validate,
+    "snap_existing",
+    (diagnostic) => diagnostics.push(diagnostic),
+  );
+  assert.equal((await runner(url)).status, "unavailable");
+  assert.deepEqual(diagnostics, [
+    { stage: "audit", classification: "setup_command_failed" },
+  ]);
+  assert.equal(sandbox.events.at(-1), "stop");
+  assert.deepEqual(
+    lighthouseSetupDiagnostic(new Error("SECRET_PROVIDER_BODY"), "parse"),
+    { stage: "parse", classification: "unknown" },
+  );
+});
+
 test("quota and permission failures never create a replacement sandbox", async () => {
   let calls = 0;
   const runner = createSandboxLighthouseRunner(

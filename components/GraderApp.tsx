@@ -43,6 +43,10 @@ import { assessPractice, getQuestionApplicability } from "../lib/scoring";
 import { SAMPLE_ANSWERS, SAMPLE_CONTEXT, SAMPLE_CONTROLS } from "../lib/demo";
 import {
   emptyStore,
+  appendLocalAssessment,
+  ASSESSMENT_DRAFT_KEY,
+  LOCAL_ASSESSMENT_LIMIT,
+  parseAssessmentDraft,
   normalizeWebsite,
   parseStore,
   retainActionProgress,
@@ -52,8 +56,10 @@ import {
   type PreviewPreferences,
   type PreviewStore,
   type SavedAssessment,
+  type AssessmentDraft,
 } from "../lib/storage";
 import type { CloudActionProgress } from "../lib/account/types";
+import { mergeAccountProgress } from "../lib/account-device-progress";
 import {
   DOMAIN_IDS,
   type Answers,
@@ -74,7 +80,13 @@ type View =
   | "progress"
   | "methodology"
   | "admin";
-type Modal = "preferences" | "clear" | "email" | "sharing" | null;
+type Modal =
+  | "preferences"
+  | "clear"
+  | "email"
+  | "sharing"
+  | "discard_draft"
+  | null;
 const GOALS: {
   id: Goal;
   label: string;
@@ -166,6 +178,30 @@ const band = (value: number | null) =>
           ? "A working foundation"
           : "A reviewed process";
 
+function locationKey(view: View, step: number, reportId: string | null) {
+  if (view === "assessment") return `${view}:${step}`;
+  if (view === "report" || view === "progress")
+    return `${view}:${reportId ?? ""}`;
+  return view;
+}
+
+function writeLocation(
+  view: View,
+  step: number,
+  reportId: string | null,
+  replace: boolean,
+) {
+  const url = new URL(window.location.href);
+  for (const key of ["view", "step", "report"]) url.searchParams.delete(key);
+  if (view !== "home") url.searchParams.set("view", view);
+  if (view === "assessment") url.searchParams.set("step", String(step));
+  if ((view === "report" || view === "progress") && reportId)
+    url.searchParams.set("report", reportId);
+  const next = `${url.pathname}${url.search}${url.hash}`;
+  if (replace) window.history.replaceState(null, "", next);
+  else window.history.pushState(null, "", next);
+}
+
 function ScoreRing({
   score,
   small = false,
@@ -214,10 +250,20 @@ function Dialog({
   close: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const openerRef = useRef<Element | null>(null);
   useEffect(() => {
     const dialog = ref.current;
+    if (!openerRef.current) openerRef.current = document.activeElement;
     dialog?.showModal();
-    return () => dialog?.close();
+    return () => {
+      dialog?.close();
+      requestAnimationFrame(() => {
+        if (document.querySelector("dialog[open]")) return;
+        const opener = openerRef.current;
+        if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+        else document.getElementById("main-content")?.focus();
+      });
+    };
   }, []);
   return (
     <dialog
@@ -310,12 +356,15 @@ function ActionCard({
             </p>
           </div>
         )}
-        <ActionProgressControls
-          state={state}
-          progress={progress}
-          onChange={setState}
-          outcomePrompt={action.verification}
-        />
+        <details open={index === 0 || state !== "todo"}>
+          <summary className="text-link">Track this action</summary>
+          <ActionProgressControls
+            state={state}
+            progress={progress}
+            onChange={setState}
+            outcomePrompt={action.verification}
+          />
+        </details>
       </div>
     </article>
   );
@@ -354,6 +403,11 @@ export default function GraderApp({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [practiceId, setPracticeId] = useState("");
   const [baselineId, setBaselineId] = useState<string | null>(null);
+  const [savedDraft, setSavedDraft] = useState<AssessmentDraft | null>(null);
+  const draftRef = useRef<AssessmentDraft | null>(null);
+  const historyRef = useRef(store.assessments);
+  const lastLocation = useRef("");
+  const [removeDeviceId, setRemoveDeviceId] = useState<string | null>(null);
   const [detailDomain, setDetailDomain] = useState<DomainId | null>(null);
   const mainRef = useRef<HTMLElement>(null);
   const websiteScans = useWebsiteScans(
@@ -368,12 +422,14 @@ export default function GraderApp({
   const [suggestedJurisdiction, setSuggestedJurisdiction] = useState("");
 
   useEffect(() => {
+    let restoredStore = store;
+    let restoredDraft: AssessmentDraft | null = null;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         const saved = parseStore(raw);
-        if (saved)
-          setStore({
+        if (saved) {
+          restoredStore = {
             ...saved,
             activeRelease: structuredClone(publishedRelease),
             releaseHistory: [
@@ -382,21 +438,86 @@ export default function GraderApp({
                 (item) => item.id !== publishedRelease.id,
               ),
             ].slice(0, 30),
-          });
-        else {
+          };
+          setStore(restoredStore);
+        } else {
           setUnreadableData(raw);
           setStorageWarning(
             "Saved data could not be read and has been preserved. Download a recovery copy, then clear saved data to resume saving.",
           );
         }
       }
+      restoredDraft = parseAssessmentDraft(
+        localStorage.getItem(ASSESSMENT_DRAFT_KEY),
+      );
     } catch {
       setStorageWarning(
         "Browser storage is unavailable. You can use the preview, but changes will not persist after this session.",
       );
     }
+    historyRef.current = restoredStore.assessments;
+    draftRef.current = restoredDraft;
+    setSavedDraft(restoredDraft);
+    restoreLocation(restoredStore.assessments, restoredDraft);
     setLoaded(true);
   }, [publishedRelease]);
+  useEffect(() => {
+    historyRef.current = store.assessments;
+  }, [store.assessments]);
+  useEffect(() => {
+    if (!loaded) return;
+    const onPopState = () =>
+      restoreLocation(historyRef.current, draftRef.current);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [loaded]);
+  useEffect(() => {
+    if (!loaded) return;
+    const key = locationKey(view, wizardStep, selectedId);
+    if (lastLocation.current !== key) {
+      writeLocation(view, wizardStep, selectedId, false);
+      lastLocation.current = key;
+    }
+  }, [loaded, view, wizardStep, selectedId]);
+  useEffect(() => {
+    if (!loaded || view !== "assessment" || !practiceId || unreadableData)
+      return;
+    const draft: AssessmentDraft = {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      context,
+      answers,
+      controls,
+      release: assessmentRelease,
+      practiceId,
+      baselineId,
+      module,
+      step: wizardStep,
+      isSample,
+    };
+    draftRef.current = draft;
+    setSavedDraft(draft);
+    try {
+      localStorage.setItem(ASSESSMENT_DRAFT_KEY, JSON.stringify(draft));
+    } catch {
+      setStorageWarning(
+        "This draft could not be saved on this device. Keep this page open until you finish your report.",
+      );
+    }
+  }, [
+    loaded,
+    view,
+    context,
+    answers,
+    controls,
+    assessmentRelease,
+    practiceId,
+    baselineId,
+    module,
+    wizardStep,
+    isSample,
+    unreadableData,
+  ]);
   useEffect(() => {
     if (loaded && !unreadableData) {
       try {
@@ -483,11 +604,124 @@ export default function GraderApp({
   function notify(message: string) {
     setToast(message);
   }
-  function navigate(next: View) {
+  function navigate(next: View, reportId?: string) {
+    if (next === "report" || next === "progress")
+      setSelectedId(reportId ?? current?.id ?? null);
     setView(next);
     setDetailDomain(null);
   }
+  function applyDraft(draft: AssessmentDraft) {
+    setContext(structuredClone(draft.context));
+    setAnswers(structuredClone(draft.answers));
+    setControls(structuredClone(draft.controls));
+    setAssessmentRelease(structuredClone(draft.release));
+    setPracticeId(draft.practiceId);
+    setBaselineId(draft.baselineId);
+    setModule(draft.module);
+    setIsSample(draft.isSample);
+    setWebsite(draft.context.websiteUrl ?? "");
+    setWizardStep(draft.step);
+  }
+  function restoreLocation(
+    history: SavedAssessment[],
+    draft: AssessmentDraft | null,
+  ) {
+    const params = new URLSearchParams(window.location.search);
+    const requestedReport = params.get("report");
+    const requestedView =
+      params.get("view") ?? (requestedReport ? "report" : "home");
+    const allowedViews: View[] = [
+      "home",
+      "assessment",
+      "report",
+      "progress",
+      "methodology",
+      "admin",
+    ];
+    let nextView = allowedViews.includes(requestedView as View)
+      ? (requestedView as View)
+      : "home";
+    let nextId =
+      history.find((entry) => entry.id === requestedReport)?.id ?? null;
+    let nextStep = 0;
+    if ((nextView === "report" || nextView === "progress") && !nextId) {
+      nextId = history[0]?.id ?? null;
+      if (requestedReport)
+        notify(
+          "That report is not saved on this device. Your available device history is shown here.",
+        );
+      if (!nextId) nextView = "progress";
+    }
+    if (nextView === "assessment") {
+      if (draft) {
+        applyDraft(draft);
+        const step = Number(params.get("step") ?? draft.step);
+        nextStep =
+          Number.isInteger(step) && step >= 0 && step <= 2 ? step : draft.step;
+      } else {
+        nextId = history[0]?.id ?? null;
+        nextView = nextId ? "report" : "home";
+        notify(
+          "Your completed assessment is saved. Choose Reassess to review its answers in a new report.",
+        );
+      }
+    }
+    setSelectedId(nextId);
+    setWizardStep(nextStep);
+    setView(nextView);
+    setDetailDomain(null);
+    lastLocation.current = locationKey(nextView, nextStep, nextId);
+    writeLocation(nextView, nextStep, nextId, true);
+  }
+  function resumeDraft() {
+    if (!savedDraft) return;
+    applyDraft(savedDraft);
+    navigate("assessment");
+  }
+  function forgetDraft() {
+    try {
+      localStorage.removeItem(ASSESSMENT_DRAFT_KEY);
+    } catch {
+      notify(
+        "The draft could not be removed from this browser. Check browser storage and try again.",
+      );
+      return;
+    }
+    draftRef.current = null;
+    setSavedDraft(null);
+  }
+  function reserveReport(entry: SavedAssessment) {
+    try {
+      const history = appendLocalAssessment(historyRef.current, entry);
+      historyRef.current = history;
+      return history;
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "Your device history is full. Download a backup and remove a device copy before adding another.",
+      );
+      return null;
+    }
+  }
+  function keepUnfinishedDraft() {
+    if (!savedDraft) return false;
+    navigate("home");
+    notify(
+      "You have an unfinished assessment. Continue it or discard the draft below before starting another.",
+    );
+    return true;
+  }
   function start(noSite = false) {
+    if (!loaded) return;
+    if (keepUnfinishedDraft()) return;
+    if (historyRef.current.length >= LOCAL_ASSESSMENT_LIMIT) {
+      navigate("progress");
+      notify(
+        "This device has 40 reports. Download a backup and remove a device copy before starting another.",
+      );
+      return;
+    }
     let normalized =
       noSite || !website.trim() ? null : normalizeWebsite(website);
     if (!noSite && website.trim() && !normalized) {
@@ -569,16 +803,23 @@ export default function GraderApp({
             )
           : undefined,
     };
+    const assessments = reserveReport(entry);
+    if (!assessments) return;
     setStore((s) => {
-      const assessments = [entry, ...s.assessments].slice(0, 30);
       return {
         ...s,
         assessments,
         actionProgress: retainActionProgress(s.actionProgress, assessments),
       };
     });
-    setSelectedId(entry.id);
-    navigate("report");
+    if (!sample || view === "assessment") {
+      try {
+        localStorage.removeItem(ASSESSMENT_DRAFT_KEY);
+      } catch {}
+      draftRef.current = null;
+      setSavedDraft(null);
+    }
+    navigate("report", entry.id);
   }
   function exploreSample() {
     saveAssessment(
@@ -600,9 +841,11 @@ export default function GraderApp({
       createdAt: new Date().toISOString(),
       websiteScan: structuredClone(reportScan.result),
     };
+    const assessments = reserveReport(entry);
+    if (!assessments) return;
     setStore((previous) => ({
       ...previous,
-      assessments: [entry, ...previous.assessments].slice(0, 30),
+      assessments,
       actionProgress: retainActionProgress(
         {
           ...previous.actionProgress,
@@ -615,7 +858,7 @@ export default function GraderApp({
               ]),
           ),
         },
-        [entry, ...previous.assessments].slice(0, 30),
+        assessments,
       ),
       actionStates: {
         ...previous.actionStates,
@@ -649,9 +892,11 @@ export default function GraderApp({
         baselineId: current.id,
         createdAt: new Date().toISOString(),
       };
+      const assessments = reserveReport(entry);
+      if (!assessments) return;
       setStore((previous) => ({
         ...previous,
-        assessments: [entry, ...previous.assessments].slice(0, 30),
+        assessments,
         actionProgress: retainActionProgress(
           {
             ...previous.actionProgress,
@@ -664,7 +909,7 @@ export default function GraderApp({
                 ]),
             ),
           },
-          [entry, ...previous.assessments].slice(0, 30),
+          assessments,
         ),
         actionStates: {
           ...previous.actionStates,
@@ -691,6 +936,7 @@ export default function GraderApp({
   }
   function resumeWebsiteCheck() {
     if (!resumableScan) return;
+    if (keepUnfinishedDraft()) return;
     setPracticeId(resumableScan.practiceId);
     setContext({
       ...EMPTY_CONTEXT,
@@ -708,6 +954,14 @@ export default function GraderApp({
   }
   function continueAssessment(domain: DomainId) {
     if (!current) return start();
+    if (keepUnfinishedDraft()) return;
+    if (historyRef.current.length >= LOCAL_ASSESSMENT_LIMIT) {
+      navigate("progress");
+      notify(
+        "Your earlier report is saved. Remove an unneeded device copy from history before creating a reassessment.",
+      );
+      return;
+    }
     setContext(structuredClone(current.assessment.contextSnapshot));
     setAnswers(structuredClone(current.assessment.answersSnapshot));
     setControls(structuredClone(current.assessment.controlsSnapshot));
@@ -739,6 +993,7 @@ export default function GraderApp({
           JSON.stringify(
             {
               ...store,
+              ...(savedDraft ? { unfinishedAssessment: savedDraft } : {}),
               actionProgress: retainActionProgress(
                 store.actionProgress,
                 store.assessments,
@@ -763,6 +1018,7 @@ export default function GraderApp({
     websiteScans.clear();
     try {
       localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(ASSESSMENT_DRAFT_KEY);
     } catch {}
     setStore({
       ...emptyStore(),
@@ -770,6 +1026,10 @@ export default function GraderApp({
       releaseHistory: [structuredClone(publishedRelease)],
     });
     setSelectedId(null);
+    historyRef.current = [];
+    draftRef.current = null;
+    setSavedDraft(null);
+    setRemoveDeviceId(null);
     setContext(EMPTY_CONTEXT);
     setAnswers({});
     setControls({});
@@ -787,6 +1047,26 @@ export default function GraderApp({
     setContextSuggestion(null);
     navigate("home");
     notify("Assessment history and preferences cleared from this preview.");
+  }
+  function removeDeviceReport(id: string) {
+    const assessments = historyRef.current.filter((entry) => entry.id !== id);
+    historyRef.current = assessments;
+    setStore((previous) => ({
+      ...previous,
+      assessments,
+      actionStates: Object.fromEntries(
+        Object.entries(previous.actionStates).filter(
+          ([key]) => !key.startsWith(`${id}:`),
+        ),
+      ),
+      actionProgress: retainActionProgress(
+        previous.actionProgress,
+        assessments,
+      ),
+    }));
+    if (selectedId === id) setSelectedId(assessments[0]?.id ?? null);
+    setRemoveDeviceId(null);
+    notify("The device report and its local progress were removed.");
   }
   function setAction(
     actionId: string,
@@ -811,34 +1091,28 @@ export default function GraderApp({
   function importAccountReport(
     entry: SavedAssessment,
     progress: CloudActionProgress[] = [],
+    useAccountProgress = false,
   ) {
-    const existing = store.assessments.find((item) => item.id === entry.id);
+    const existing = historyRef.current.find((item) => item.id === entry.id);
     if (existing && canonicalJson(existing) !== canonicalJson(entry))
       throw new Error(
         "A different local report has this identifier. Export it before importing another copy.",
       );
+    const assessments = appendLocalAssessment(historyRef.current, entry);
+    historyRef.current = assessments;
     setStore((previous) => {
-      const assessments = existing
-        ? previous.assessments
-        : [structuredClone(entry), ...previous.assessments].slice(0, 30);
-      const actionStates = { ...previous.actionStates };
-      const actionProgress = retainActionProgress(
-        previous.actionProgress,
+      return {
+        ...previous,
         assessments,
-      );
-      for (const action of progress) {
-        const key = `${entry.id}:${action.actionId}`;
-        if (actionStates[key] === undefined) actionStates[key] = action.state;
-        if (!actionProgress[key] && action.details)
-          actionProgress[key] = structuredClone(action.details);
-      }
-      return { ...previous, assessments, actionStates, actionProgress };
+        ...mergeAccountProgress(previous, entry, progress, useAccountProgress),
+      };
     });
-    setSelectedId(entry.id);
     setModal(null);
-    navigate("report");
+    navigate("report", entry.id);
     notify(
-      "Your account report is open on this device. Existing reports and local progress were preserved.",
+      useAccountProgress
+        ? "Your report is open with the account action progress you chose. Your other device reports are saved."
+        : "Your account report is open on this device. Existing reports and local progress were preserved.",
     );
   }
   function updatePreference(key: keyof PreviewPreferences, value: boolean) {
@@ -867,6 +1141,30 @@ export default function GraderApp({
               Your legal work is your craft. Get a clearer picture of the
               business around it—and a practical plan for what to improve next.
             </p>
+            {savedDraft && (
+              <section
+                className="guide-note"
+                aria-label="Unfinished assessment"
+              >
+                <h2>Continue where you left off</h2>
+                <p>
+                  {savedDraft.context.practiceArea || "Your practice"} · Step{" "}
+                  {savedDraft.step + 1} of 3 · Saved{" "}
+                  {dateLabel(savedDraft.updatedAt)}
+                </p>
+                <div className="button-row">
+                  <button className="btn btn-primary" onClick={resumeDraft}>
+                    Continue assessment <ArrowRight size={16} />
+                  </button>
+                  <button
+                    className="quiet-button"
+                    onClick={() => setModal("discard_draft")}
+                  >
+                    Discard unfinished draft
+                  </button>
+                </div>
+              </section>
+            )}
             <form
               className="url-form"
               onSubmit={(e) => {
@@ -888,15 +1186,22 @@ export default function GraderApp({
                     setWebsite(e.target.value);
                     setWebsiteError("");
                   }}
-                  aria-describedby="url-help"
+                  aria-invalid={!!websiteError}
+                  aria-describedby={
+                    websiteError ? "url-help website-error" : "url-help"
+                  }
                 />
-                <button className="btn btn-primary" type="submit">
+                <button
+                  className="btn btn-primary"
+                  type="submit"
+                  disabled={!loaded}
+                >
                   Find my starting point
                   <ArrowRight size={17} />
                 </button>
               </div>
               {websiteError && (
-                <p className="field-error" role="alert">
+                <p id="website-error" className="field-error" role="alert">
                   {websiteError}
                 </p>
               )}
@@ -906,7 +1211,11 @@ export default function GraderApp({
                   : "Live website checks are not available on this deployment yet. Your URL provides context for the practice assessment."}
               </p>
             </form>
-            <button className="text-link no-site" onClick={() => start(true)}>
+            <button
+              className="text-link no-site"
+              onClick={() => start(true)}
+              disabled={!loaded}
+            >
               I don’t have a website yet
               <ArrowRight size={15} />
             </button>
@@ -958,11 +1267,11 @@ export default function GraderApp({
                 <ScoreRing score={cash.score} />
                 <div>
                   <span className="eyebrow">PRICING & CASH</span>
-                  <h3>
+                  <h2 className="sample-score-heading">
                     A clear place
                     <br />
                     to start.
-                  </h3>
+                  </h2>
                   <p>
                     Bring consistency to billing
                     <br />
@@ -980,7 +1289,11 @@ export default function GraderApp({
                 </div>
                 <ChevronRight size={17} />
               </div>
-              <button className="sample-report-link" onClick={exploreSample}>
+              <button
+                className="sample-report-link"
+                onClick={exploreSample}
+                disabled={!loaded}
+              >
                 Explore the example report
                 <ArrowRight size={16} />
               </button>
@@ -1072,7 +1385,11 @@ export default function GraderApp({
               Explore a complete fictional assessment to see the experience.
             </p>
           </div>
-          <button className="btn btn-light" onClick={exploreSample}>
+          <button
+            className="btn btn-light"
+            onClick={exploreSample}
+            disabled={!loaded}
+          >
             View the example
             <ArrowUpRight size={17} />
           </button>
@@ -1095,13 +1412,8 @@ export default function GraderApp({
             <ArrowLeft size={15} />
             Back
           </button>
-          <span className="eyebrow">YOUR PRACTICE CHECKUP</span>
-          <h1>
-            A little context.
-            <br />
-            <em>A useful next step.</em>
-          </h1>
-          <p>Assess one area now. Add the others whenever you’re ready.</p>
+          <h1>Your practice checkup</h1>
+          <p>Choose one area to improve.</p>
           <ol className="step-list">
             {[
               "Your practice & priorities",
@@ -1194,10 +1506,10 @@ export default function GraderApp({
           <div className="progress-track">
             <span style={{ width: `${((wizardStep + 1) / 3) * 100}%` }} />
           </div>
-          <p className="draft-save-note">
-            Your report saves when you select “See my report.” Refreshing clears
-            unfinished questionnaire answers; a started website check can still
-            be retrieved after you save a report.
+          <p className="draft-save-note" role="status">
+            {storageWarning
+              ? "Keep this tab open while you finish. Check the browser storage message above before leaving."
+              : "Draft saved on this device. Your dated report saves when you choose “See my report.”"}
             {baselineId
               ? " Prior answers are shown for review; other areas retain their earlier answers and rubric."
               : ""}
@@ -1371,7 +1683,7 @@ export default function GraderApp({
                 These details route questions. They don’t earn or lose points.
               </p>
               <div className="wizard-actions">
-                <span>Start with four focused questions</span>
+                <span>Continue to your focused questions</span>
                 <button
                   className="btn btn-primary"
                   onClick={() => {
@@ -1964,7 +2276,11 @@ export default function GraderApp({
             Start my assessment
             <ArrowRight size={16} />
           </button>
-          <button className="btn btn-secondary" onClick={exploreSample}>
+          <button
+            className="btn btn-secondary"
+            onClick={exploreSample}
+            disabled={!loaded}
+          >
             Explore an example
           </button>
         </div>
@@ -2046,8 +2362,9 @@ export default function GraderApp({
         <div className="evidence-banner">
           <LockKeyhole size={18} />
           <span>
-            Saved on this browser and device. No account sync, reminders or
-            public sharing is connected.
+            These reports and action states are saved in this browser. Your
+            private workspace has its own saved reports, progress and optional
+            reminders.
           </span>
           <button className="text-link" onClick={() => setModal("preferences")}>
             Preferences
@@ -2117,34 +2434,67 @@ export default function GraderApp({
             <div className="card assessment-history">
               <span className="eyebrow">YOUR ASSESSMENT HISTORY</span>
               <h3>A record of where you started.</h3>
+              <p className="fine-print">
+                {store.assessments.length} of 40 device reports. Download a
+                backup before removing a copy.
+              </p>
               {store.assessments.map((r) => (
-                <button
-                  key={r.id}
-                  className={`history-item ${r.id === current.id ? "active" : ""}`}
-                  onClick={() => {
-                    setSelectedId(r.id);
-                    navigate("report");
-                  }}
-                >
-                  <span className="history-dot" />
-                  <span>
-                    <strong>{r.label}</strong>
-                    <small>
-                      {dateLabel(r.createdAt)} ·{" "}
-                      {r.isSample ? "Fictional example" : "Your answers"}
-                    </small>
-                    <small>{r.assessment.releaseSnapshot.label}</small>
-                  </span>
-                  <ArrowUpRight size={16} />
-                </button>
+                <div key={r.id}>
+                  <button
+                    className={`history-item ${r.id === current.id ? "active" : ""}`}
+                    onClick={() => navigate("report", r.id)}
+                  >
+                    <span className="history-dot" />
+                    <span>
+                      <strong>{r.label}</strong>
+                      <small>
+                        {dateLabel(r.createdAt)} ·{" "}
+                        {r.isSample ? "Fictional example" : "Your answers"}
+                      </small>
+                      <small>{r.assessment.releaseSnapshot.label}</small>
+                    </span>
+                    <ArrowUpRight size={16} />
+                  </button>
+                  <button
+                    className="quiet-button"
+                    onClick={() => setRemoveDeviceId(r.id)}
+                    aria-label={`Remove device copy of ${r.label} from ${dateLabel(r.createdAt)}`}
+                  >
+                    Remove device copy
+                  </button>
+                  {removeDeviceId === r.id && (
+                    <div className="guide-note">
+                      <p>
+                        Remove this device report and its local action progress?
+                        You can manage any account copy in your private
+                        workspace.
+                      </p>
+                      <div className="button-row">
+                        <button
+                          className="btn btn-danger btn-small"
+                          onClick={() => removeDeviceReport(r.id)}
+                        >
+                          Remove this device report
+                        </button>
+                        <button
+                          className="btn btn-secondary btn-small"
+                          onClick={() => setRemoveDeviceId(null)}
+                        >
+                          Keep device report
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
             <div className="card community-card">
               <Trophy size={26} />
               <h3>Progress worth recognizing.</h3>
               <p>
-                Future peer comparisons and recognition will be optional. Public
-                rankings need comparable, current evidence first.
+                Explore the opt-in leaderboard and the available contributor
+                comparisons. You choose publication and research permissions in
+                your workspace.
               </p>
               <button className="text-link" onClick={() => setModal("sharing")}>
                 Explore sharing preferences
@@ -2336,9 +2686,12 @@ export default function GraderApp({
         close={() => setModal(null)}
       >
         <p className="muted">
-          Preview preferences are saved on this device. They trigger no emails,
-          research contribution or public sharing.
+          Manage email, research and publication choices in your private
+          workspace. You can download or clear this device's data here.
         </p>
+        <a className="btn btn-secondary" href="/account#account-choices">
+          Open account choices <ArrowRight size={16} />
+        </a>
         <p className="fine-print">
           Website checks send a public URL for inspection. Public scan access
           expires after 30 days, and expired server records are removed during
@@ -2349,25 +2702,30 @@ export default function GraderApp({
           public scans keep their own expiry.
         </p>
         <div className="preference-list">
-          {items.map((item) => (
-            <label className="preference" key={item.key}>
-              <span>
-                <strong>{item.title}</strong>
-                <small>{item.text}</small>
-              </span>
-              <input
-                type="checkbox"
-                checked={store.preferences[item.key]}
-                onChange={(e) => updatePreference(item.key, e.target.checked)}
-              />
-              <span
-                className={`switch ${store.preferences[item.key] ? "on" : ""}`}
-                aria-hidden="true"
-              >
-                <span />
-              </span>
-            </label>
-          ))}
+          {items
+            .filter((item) => store.preferences[item.key])
+            .map((item) => (
+              <label className="preference" key={item.key}>
+                <span>
+                  <strong>Earlier device interest · {item.title}</strong>
+                  <small>
+                    Clear this earlier interest choice here. Use your account
+                    workspace for feature permissions.
+                  </small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={store.preferences[item.key]}
+                  onChange={(e) => updatePreference(item.key, e.target.checked)}
+                />
+                <span
+                  className={`switch ${store.preferences[item.key] ? "on" : ""}`}
+                  aria-hidden="true"
+                >
+                  <span />
+                </span>
+              </label>
+            ))}
         </div>
         <div className="dialog-data-actions">
           <button className="btn btn-secondary" onClick={exportData}>
@@ -2398,7 +2756,7 @@ export default function GraderApp({
       <a className="skip-link" href="#main-content">
         Skip to main content
       </a>
-      <div className="preview-bar">
+      <div className="preview-bar" role="region" aria-label="Preview status">
         <span className="preview-pill">PREVIEW</span>
         <span>
           {websiteScansEnabled
@@ -2413,8 +2771,9 @@ export default function GraderApp({
       <header className="site-header page-width">
         <button
           className="brand"
+          disabled={!loaded}
           onClick={() => navigate("home")}
-          aria-label="Practice Grader home"
+          aria-label="Practice Grader. Independent law by Pearl. Home"
         >
           <span className="brand-mark">
             <Scale size={25} />
@@ -2423,7 +2782,7 @@ export default function GraderApp({
             <strong>
               Practice Grader<span className="brand-period">.</span>
             </strong>
-            <small>INDEPENDENT LAW · BY FOUNT</small>
+            <small>INDEPENDENT LAW · BY PEARL</small>
           </span>
         </button>
         <nav aria-label="Main navigation">
@@ -2455,15 +2814,17 @@ export default function GraderApp({
           <span>Private account</span>
         </a>
       </header>
-      <nav
-        className="growth-nav page-width"
-        aria-label="Learning and community"
-      >
-        <a href="/benchmarks">Industry benchmarks</a>
-        <a href="/leaderboard">Opt-in leaderboard</a>
-        <a href="/account#practice-learning">Weekly practice lessons</a>
-        <a href="/account#business-outcomes">Track business outcomes</a>
-      </nav>
+      {view !== "assessment" && (
+        <nav
+          className="growth-nav page-width"
+          aria-label="Learning and community"
+        >
+          <a href="/benchmarks">Industry benchmarks</a>
+          <a href="/leaderboard">Opt-in leaderboard</a>
+          <a href="/account#practice-learning">Weekly practice lessons</a>
+          <a href="/account#business-outcomes">Track business outcomes</a>
+        </nav>
+      )}
       {storageWarning && (
         <div className="storage-warning" role="alert">
           {storageWarning}
@@ -2546,6 +2907,34 @@ export default function GraderApp({
       )}
       {(modal === "preferences" || modal === "sharing") &&
         renderPreferences(modal === "sharing")}
+      {modal === "discard_draft" && (
+        <Dialog
+          title="Discard the unfinished assessment?"
+          close={() => setModal(null)}
+        >
+          <p>
+            This removes the unfinished answers saved on this device. Your
+            completed reports stay in your device history.
+          </p>
+          <div className="button-row">
+            <button
+              className="btn btn-danger"
+              onClick={() => {
+                forgetDraft();
+                setModal(null);
+              }}
+            >
+              Discard draft
+            </button>
+            <button
+              className="btn btn-secondary"
+              onClick={() => setModal(null)}
+            >
+              Keep draft
+            </button>
+          </div>
+        </Dialog>
+      )}
       {modal === "clear" && (
         <Dialog
           title="Clear this device’s preview data?"

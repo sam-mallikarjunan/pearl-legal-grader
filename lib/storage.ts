@@ -1,6 +1,10 @@
 import {
   DOMAIN_IDS,
   type PracticeAssessment,
+  type PracticeContext,
+  type Answers,
+  type ControlAnswers,
+  type DomainId,
   type ReleaseSnapshot,
 } from "./types";
 import { DEFAULT_RELEASE } from "./catalog";
@@ -8,6 +12,8 @@ import { validateRelease } from "./scoring";
 import { isWebsiteScanResult, type WebsiteScanResult } from "./website/types";
 
 export const STORAGE_KEY = "fount.practice-grader.preview.v1";
+export const LOCAL_ASSESSMENT_LIMIT = 40;
+export const ASSESSMENT_DRAFT_KEY = "pearl.practice-grader.draft.v1";
 // Keep scan credentials separate so normal and recovery exports never contain them.
 export const SCAN_ACCESS_KEY = "fount.practice-grader.scan-access.v1";
 export type WebsiteScanStatus =
@@ -69,6 +75,31 @@ export interface SavedAssessment {
   isSample: boolean;
   assessment: PracticeAssessment;
   websiteScan?: WebsiteScanResult;
+}
+export interface AssessmentDraft {
+  version: 1;
+  updatedAt: string;
+  context: PracticeContext;
+  answers: Answers;
+  controls: ControlAnswers;
+  release: ReleaseSnapshot;
+  practiceId: string;
+  baselineId: string | null;
+  module: DomainId;
+  step: number;
+  isSample: boolean;
+}
+
+export function appendLocalAssessment(
+  history: SavedAssessment[],
+  entry: SavedAssessment,
+): SavedAssessment[] {
+  if (history.some((report) => report.id === entry.id)) return history;
+  if (history.length >= LOCAL_ASSESSMENT_LIMIT)
+    throw new Error(
+      "This device has 40 saved reports. Download a backup, then remove a device report from My progress before adding another. Your account copies are separate.",
+    );
+  return [entry, ...history];
 }
 export interface PreviewPreferences {
   reminders: boolean;
@@ -218,6 +249,52 @@ function validContext(value: unknown): boolean {
     (value.handlesClientFunds === null ||
       typeof value.handlesClientFunds === "boolean")
   );
+}
+
+export function parseAssessmentDraft(
+  raw: string | null,
+): AssessmentDraft | null {
+  if (!raw || raw.length > 1_000_000) return null;
+  try {
+    const value: unknown = JSON.parse(raw);
+    if (
+      !isRecord(value) ||
+      value.version !== 1 ||
+      !isTimestamp(value.updatedAt) ||
+      !validContext(value.context) ||
+      validateRelease(value.release).length > 0 ||
+      !isString(value.practiceId) ||
+      !value.practiceId.trim() ||
+      value.practiceId.length > 100 ||
+      (value.baselineId !== null &&
+        (!isString(value.baselineId) || value.baselineId.length > 100)) ||
+      !isOneOf(value.module, DOMAIN_IDS) ||
+      !Number.isInteger(value.step) ||
+      Number(value.step) < 0 ||
+      Number(value.step) > 2 ||
+      typeof value.isSample !== "boolean" ||
+      !isRecord(value.answers) ||
+      !isRecord(value.controls)
+    )
+      return null;
+    const release = value.release as ReleaseSnapshot;
+    const questionIds = new Set(
+      release.questions.map((question) => question.id),
+    );
+    if (
+      !Object.entries(value.answers).every(
+        ([id, answer]) => questionIds.has(id) && isOneOf(answer, ANSWER_VALUES),
+      ) ||
+      !Object.entries(value.controls).every(
+        ([id, answer]) =>
+          CONTROL_IDS.includes(id) && isOneOf(answer, CONTROL_STATUSES),
+      )
+    )
+      return null;
+    return value as unknown as AssessmentDraft;
+  } catch {
+    return null;
+  }
 }
 
 /** Validate the issued snapshot's shape; never recalculate historical grades. */
@@ -411,7 +488,11 @@ export function parseStore(raw: string | null): PreviewStore | null {
       v.releaseHistory.some((r) => validateRelease(r).length > 0)
     )
       return null;
-    if (!Array.isArray(v.assessments) || v.assessments.length > 40) return null;
+    if (
+      !Array.isArray(v.assessments) ||
+      v.assessments.length > LOCAL_ASSESSMENT_LIMIT
+    )
+      return null;
     const assessmentIds = new Set<string>();
     for (const entry of v.assessments) {
       if (

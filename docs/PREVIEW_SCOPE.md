@@ -62,6 +62,8 @@ Avoid “Your firm is compliant,” “Best lawyer,” “AI verified,” invent
 
 Actions explain the finding, why it matters, what to do and effort. Operating action completion reads **Completed by you**, not **Verified improvement**. Empty history invites a baseline rather than fabricating a chart. Reassessment preserves original rubric versions and distinguishes newly supplied evidence from business improvement.
 
+Unfinished assessments retain their exact questions, answers and step on the device. Browser navigation and refresh restore the active view. Device exports include the unfinished draft, and device clear removes it. History supports 40 reports and rejects additions at capacity until an owner confirms removing a copy.
+
 Saved questionnaire history and report copies stay in this browser. Users can save another dated website snapshot; earlier reports are not rewritten. Server records and local copies have separate retention behavior.
 
 The protected administration page edits shared questionnaire wording, weights and supported applicability rules. Every publication has a reason, immutable release and audit record. Administrators preview six fictional contexts and can roll back through an atomic active-release pointer. Earlier assessments keep their original version. Local draft changes cannot become canonical account grades.
