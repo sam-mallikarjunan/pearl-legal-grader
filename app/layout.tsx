@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Independent Law Practice Grader | Fount",
+  title: "Independent Law Practice Grader | Pearl",
   description:
     "Build a practice that works for you. Explore a short operating assessment, a clear improvement plan, and your next useful action.",
   robots: { index: false, follow: false },
