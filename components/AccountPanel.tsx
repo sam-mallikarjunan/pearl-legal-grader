@@ -955,6 +955,14 @@ export default function AccountPanel({
     });
   }
   const user = session?.user;
+  const selectedReportSaved =
+    selectedReport &&
+    reports.some(
+      (saved) =>
+        saved.snapshot.id === selectedReport.id ||
+        (guidedSave?.localReportId === selectedReport.id &&
+          guidedSave.accountReportId === saved.id),
+    );
   const prefsChanged =
     preferences && stable(preferenceDraft) !== stable(preferences.values);
   return (
@@ -1072,7 +1080,8 @@ export default function AccountPanel({
                       type="submit"
                       disabled={!!busy}
                     >
-                      Open my workspace <ArrowRight size={16} />
+                      {selectedReport ? "Verify code" : "Open my workspace"}
+                      <ArrowRight size={16} />
                     </button>
                     <button
                       className="quiet-button"
@@ -1138,15 +1147,19 @@ export default function AccountPanel({
             ))}
           {selectedReport && (
             <section className="guide-note" aria-label="Save selected report">
-              <h3>Save this report</h3>
+              <h3>
+                {selectedReportSaved
+                  ? "Report saved to your workspace"
+                  : "Save this report"}
+              </h3>
               <p>
                 {selectedReport.label} ·{" "}
                 {new Date(selectedReport.createdAt).toLocaleDateString()}
               </p>
               <p className="fine-print">
-                Only this report and its action progress are sent to your
-                private account. Other local history and browser-only rubric
-                edits are not uploaded.
+                {selectedReportSaved
+                  ? "Open your workspace to continue your action and review progress."
+                  : "Choose Save selected report to send this report and its action progress to your private account."}
               </p>
               {selectedReport.isSample ? (
                 <p className="fine-print">
@@ -1155,37 +1168,37 @@ export default function AccountPanel({
                 </p>
               ) : (
                 <div className="button-row">
-                  <button
-                    className="btn btn-primary"
-                    disabled={!!busy}
-                    onClick={() => saveSelected()}
-                  >
-                    <Save size={16} />
-                    Save selected report
-                  </button>
-                  {reports.some(
-                    (saved) =>
-                      saved.snapshot.id === selectedReport.id ||
-                      (guidedSave?.localReportId === selectedReport.id &&
-                        guidedSave.accountReportId === saved.id),
-                  ) && (
-                    <a
-                      className="btn btn-secondary"
-                      href="/account#first-improvement"
-                    >
-                      Continue to the first improvement guide{" "}
-                      <ArrowRight size={16} />
-                    </a>
-                  )}
-                  {errorCode === "website_evidence_unverified" && (
+                  {selectedReportSaved ? (
+                    <>
+                      <a className="btn btn-primary" href="/account">
+                        Open my workspace <ArrowRight size={16} />
+                      </a>
+                      <a
+                        className="text-link"
+                        href="/account#first-improvement"
+                      >
+                        Plan a monthly comparison
+                      </a>
+                    </>
+                  ) : (
                     <button
-                      className="btn btn-secondary"
+                      className="btn btn-primary"
                       disabled={!!busy}
-                      onClick={() => saveSelected(true)}
+                      onClick={() => saveSelected()}
                     >
-                      Save a new owner-only copy
+                      <Save size={16} /> Save selected report
                     </button>
                   )}
+                  {!selectedReportSaved &&
+                    errorCode === "website_evidence_unverified" && (
+                      <button
+                        className="btn btn-secondary"
+                        disabled={!!busy}
+                        onClick={() => saveSelected(true)}
+                      >
+                        Save a new owner-only copy
+                      </button>
+                    )}
                 </div>
               )}
             </section>

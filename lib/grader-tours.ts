@@ -18,7 +18,7 @@ export const GRADER_TOURS: Record<string, GraderTour> = {
         id: "website",
         target: '[data-tour="start-website"]',
         title: "Start with what you have",
-        body: "Paste your firm’s public website to add website checks. If you don’t have one yet, use the option just below. That choice won’t lower your practice grade.",
+        body: "Paste your firm’s public website to add website checks. If you don’t have one yet, select “I don’t have a website yet.” You’ll get a practice assessment either way.",
       },
       {
         id: "example",
@@ -131,7 +131,7 @@ export const GRADER_TOURS: Record<string, GraderTour> = {
         id: "save",
         target: '[data-tour="report-save"]',
         title: "Come back with new evidence",
-        body: "Your report is saved in this browser. Use My progress to track work and reassess, or the email and login options to save a selected report privately and continue on another device.",
+        body: "Your report is saved in this browser. Use My progress to track work and reassess, or choose “Save to my workspace” to keep a private copy and continue on another device.",
       },
     ],
   },

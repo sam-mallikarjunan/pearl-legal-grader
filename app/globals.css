@@ -470,7 +470,7 @@ svg {
 .url-form {
   margin-top: 31px;
 }
-.url-form > label {
+.website-start-options > label {
   font-size: 11px;
   font-weight: 600;
   display: block;
@@ -2824,7 +2824,7 @@ svg {
   .url-form {
     margin-top: 25px;
   }
-  .url-form > label {
+  .website-start-options > label {
     font-size: 11px;
   }
   .url-input-row {
@@ -4004,4 +4004,95 @@ svg {
 .aside-note p {
   font-size: 0.8125rem;
   line-height: 1.55;
+}
+
+/* Keep the optional tour and real assessment paths close together. */
+.grader-tour-entry {
+  margin-block: 14px;
+}
+
+.grader-tour-entry .guided-tour-offer {
+  padding: 10px 14px;
+  gap: 12px;
+  border-radius: 10px;
+}
+
+.grader-tour-entry .guided-tour-offer h2 {
+  margin: 0;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.grader-tour-entry .guided-tour-offer p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.grader-tour-entry
+  .guided-tour-offer
+  :is(.guided-tour-kicker, .guided-tour-privacy) {
+  display: none;
+}
+
+.grader-tour-entry .guided-tour-entry-actions {
+  gap: 10px;
+}
+
+.grader-tour-entry .guided-tour-entry-actions .btn {
+  min-height: 40px;
+  padding: 8px 12px;
+}
+
+.hero-copy .url-form {
+  margin-top: 16px;
+}
+
+.website-start-options {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  column-gap: 12px;
+  margin-bottom: 6px;
+}
+
+.website-start-options > label {
+  margin-bottom: 0;
+}
+
+.website-start-options .no-site {
+  margin-top: 0;
+  min-height: 40px;
+}
+
+.report-action-jump {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 12px;
+  min-height: 40px;
+}
+
+#report-actions {
+  scroll-margin-top: 16px;
+}
+
+@media (max-width: 600px) {
+  .hero {
+    padding-top: 18px;
+  }
+
+  .hero h1 {
+    font-size: clamp(36px, 10vw, 44px);
+  }
+
+  .hero-copy > .eyebrow {
+    margin-bottom: 11px;
+  }
+
+  .hero-copy .hero-description {
+    margin-top: 12px;
+  }
 }

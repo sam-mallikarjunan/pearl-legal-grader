@@ -61,6 +61,60 @@ function sameLayout(a: Layout | null, b: Layout) {
     JSON.stringify(a.target) === JSON.stringify(b.target)
   );
 }
+
+function mobilePlacement(
+  target: DOMRect,
+  viewportHeight: number,
+  cardHeight: number,
+  canScroll: boolean,
+) {
+  const margin = 12;
+  const gap = 12;
+  const bottom = Math.max(margin, viewportHeight - cardHeight - margin);
+  const options = [
+    {
+      top: bottom,
+      start: margin,
+      end: Math.max(margin, bottom - gap),
+    },
+    {
+      top: margin,
+      start: Math.min(viewportHeight - margin, margin + cardHeight + gap),
+      end: viewportHeight - margin,
+    },
+  ];
+  const scrollY = window.scrollY;
+  const maxScrollY = Math.max(
+    0,
+    (document.scrollingElement?.scrollHeight ?? viewportHeight) -
+      viewportHeight,
+  );
+  const candidates = options.map(({ top, start, end }) => {
+    let scroll = 0;
+    if (canScroll) {
+      // Keep short targets fully in the free area and show as much of larger ones as possible.
+      const alignStart = target.top - start;
+      const alignEnd = target.bottom - end;
+      const nearest = Math.min(
+        Math.max(0, Math.min(alignStart, alignEnd)),
+        Math.max(alignStart, alignEnd),
+      );
+      scroll = Math.max(0, Math.min(maxScrollY, scrollY + nearest)) - scrollY;
+    }
+    const exposed = Math.max(
+      0,
+      Math.min(end, target.bottom - scroll) -
+        Math.max(start, target.top - scroll),
+    );
+    return { top, scroll, exposed };
+  });
+  const [below, above] = candidates;
+  // Prefer the placement with more visible evidence, then the shorter scroll.
+  if (Math.abs(above.exposed - below.exposed) > 1)
+    return above.exposed > below.exposed ? above : below;
+  return Math.abs(above.scroll) + 1 < Math.abs(below.scroll) ? above : below;
+}
+
 export default function GuidedTour({
   tourId,
   steps,
@@ -183,12 +237,10 @@ export default function GuidedTour({
       );
       if (target && firstMeasure) {
         const box = target.getBoundingClientRect();
-        if (vw <= 600 && (box.bottom > vh - height - 32 || box.top < 12)) {
-          window.scrollBy({
-            top:
-              box.top + box.height / 2 - Math.max(48, (vh - height - 24) / 2),
-            behavior: "instant",
-          });
+        if (vw <= 600) {
+          const { scroll } = mobilePlacement(box, vh, height, true);
+          if (Math.abs(scroll) > 1)
+            window.scrollBy({ top: scroll, behavior: "instant" });
         } else if (box.top < 12 || box.bottom > vh - 12)
           target.scrollIntoView({
             block: "center",
@@ -215,7 +267,9 @@ export default function GuidedTour({
           : null;
       let left = Math.max(12, (vw - width) / 2),
         top = Math.max(12, vh - height - 12);
-      if (vw > 600 && anchor) {
+      if (vw <= 600 && box) {
+        top = mobilePlacement(box, vh, height, false).top;
+      } else if (anchor) {
         if (anchor.left + anchor.width + width + 28 <= vw) {
           left = anchor.left + anchor.width + 16;
           top = anchor.top;

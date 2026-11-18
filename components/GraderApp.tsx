@@ -1205,7 +1205,7 @@ export default function GraderApp({
             "Juniper’s chosen goal is cash collection. The priority score and evidence coverage show what supports this fictional starting point. Your own goal will shape your report.",
           action:
             "Explore a sample checklist and what done looks like. Tracking an action in this example changes only its local example progress. It doesn’t describe work at your firm.",
-          save: "You can explore My progress for this example. Create your own assessment before using email and login options to save a report privately. Fictional examples cannot be saved to your account.",
+          save: "Explore My progress for this example, or start your own assessment to get a report you can save to your private workspace.",
         };
         return { ...step, body: sampleBodies[step.id] ?? step.body };
       });
@@ -1248,8 +1248,8 @@ export default function GraderApp({
               <em>On your terms.</em>
             </h1>
             <p className="hero-description">
-              Your legal work is your craft. Get a clearer picture of the
-              business around it—and a practical plan for what to improve next.
+              Get a short business checkup and choose one useful step to improve
+              your practice. No account needed to start.
             </p>
             {savedDraft && (
               <section
@@ -1275,15 +1275,25 @@ export default function GraderApp({
                 </div>
               </section>
             )}
+            {renderTour("start")}
             <form
               className="url-form"
-              data-tour="start-website"
               onSubmit={(e) => {
                 e.preventDefault();
                 start();
               }}
             >
-              <label htmlFor="website">Start with your website</label>
+              <div className="website-start-options" data-tour="start-website">
+                <label htmlFor="website">Start with your website</label>
+                <button
+                  className="text-link no-site"
+                  type="button"
+                  onClick={() => start(true)}
+                  disabled={!loaded}
+                >
+                  I don’t have a website yet <ArrowRight size={15} />
+                </button>
+              </div>
               <div className="url-input-row">
                 <Globe2 size={20} />
                 <input
@@ -1322,14 +1332,6 @@ export default function GraderApp({
                   : "Live website checks are not available on this deployment yet. Your URL provides context for the practice assessment."}
               </p>
             </form>
-            <button
-              className="text-link no-site"
-              onClick={() => start(true)}
-              disabled={!loaded}
-            >
-              I don’t have a website yet
-              <ArrowRight size={15} />
-            </button>
             <div className="hero-assurances">
               <span>
                 <Check size={15} />
@@ -1344,7 +1346,6 @@ export default function GraderApp({
                 Saved on this device
               </span>
             </div>
-            {renderTour("start")}
             {resumableScan && (
               <div className="scan-resume">
                 <Globe2 size={19} />
@@ -2078,6 +2079,19 @@ export default function GraderApp({
                 {focus.answeredCount} of {focus.applicableCount} applicable
                 questions answered
               </div>
+              {report.actions.length > 0 && (
+                <button
+                  className="text-link report-action-jump"
+                  type="button"
+                  onClick={() => {
+                    const actions = document.getElementById("report-actions");
+                    actions?.focus({ preventScroll: true });
+                    actions?.scrollIntoView({ block: "start" });
+                  }}
+                >
+                  Go to my first action <ArrowDown size={16} />
+                </button>
+              )}
             </div>
             <ScoreRing score={focus.score} />
           </div>
@@ -2118,7 +2132,7 @@ export default function GraderApp({
             }
           />
         )}
-        <div className="section-heading">
+        <div className="section-heading" id="report-actions" tabIndex={-1}>
           <div>
             <span className="eyebrow">A PRACTICAL PLACE TO BEGIN</span>
             <h2>Your next three actions</h2>
@@ -2155,20 +2169,22 @@ export default function GraderApp({
           )}
         </div>
         {!current.isSample && report.actions.length > 0 && (
-          <aside className="guide-note improvement-report-entry">
+          <aside
+            className="guide-note improvement-report-entry"
+            data-tour="report-save"
+          >
             <div>
-              <span className="eyebrow">PICK ONE THING TO IMPROVE</span>
-              <h3>Turn a recommendation into a follow-up plan</h3>
+              <h3>Keep working on this action</h3>
               <p>
-                Save this assessment privately, choose one action, and decide
-                what to measure after a future month closes.
+                Save your report and action progress to reopen them in your
+                private workspace, even on another device.
               </p>
             </div>
             <button
               className="btn btn-primary"
               onClick={() => setModal("email")}
             >
-              Save and plan a follow-up <ArrowRight size={16} />
+              Save to my workspace <ArrowRight size={16} />
             </button>
           </aside>
         )}
@@ -2298,7 +2314,14 @@ export default function GraderApp({
             ))}
           </div>
         </div>
-        <div className="save-banner" data-tour="report-save">
+        <div
+          className="save-banner"
+          data-tour={
+            current.isSample || report.actions.length === 0
+              ? "report-save"
+              : undefined
+          }
+        >
           <div>
             <h3>A baseline to come back to.</h3>
             <p>
@@ -2313,9 +2336,15 @@ export default function GraderApp({
             View my progress
             <ArrowRight size={16} />
           </button>
-          <button className="quiet-button" onClick={() => setModal("email")}>
-            Email / login options
-          </button>
+          {current.isSample ? (
+            <button className="quiet-button" onClick={() => navigate("home")}>
+              Start my own assessment
+            </button>
+          ) : (
+            <button className="quiet-button" onClick={() => setModal("email")}>
+              Save to my workspace
+            </button>
+          )}
         </div>
         <div className="report-meta">
           <span>
@@ -2963,17 +2992,6 @@ export default function GraderApp({
           <span>Private account</span>
         </a>
       </header>
-      {view !== "assessment" && (
-        <nav
-          className="growth-nav page-width"
-          aria-label="Learning and community"
-        >
-          <a href="/benchmarks">Industry benchmarks</a>
-          <a href="/leaderboard">Opt-in leaderboard</a>
-          <a href="/account#practice-learning">Weekly practice lessons</a>
-          <a href="/account#business-outcomes">Track business outcomes</a>
-        </nav>
-      )}
       {storageWarning && (
         <div className="storage-warning" role="alert">
           {storageWarning}
@@ -3031,6 +3049,17 @@ export default function GraderApp({
           </section>
         )}
       </main>
+      {view !== "assessment" && (
+        <nav
+          className="growth-nav page-width"
+          aria-label="Learning and community"
+        >
+          <a href="/benchmarks">Industry benchmarks</a>
+          <a href="/leaderboard">Opt-in leaderboard</a>
+          <a href="/account#practice-learning">Weekly practice lessons</a>
+          <a href="/account#business-outcomes">Track business outcomes</a>
+        </nav>
+      )}
       <footer className="site-footer page-width">
         <div className="footer-brand">
           <Scale size={19} />
