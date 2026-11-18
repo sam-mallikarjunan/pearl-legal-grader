@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   ArrowDown,
   ArrowLeft,
@@ -404,9 +411,11 @@ export default function GraderApp({
   const [practiceId, setPracticeId] = useState("");
   const [baselineId, setBaselineId] = useState<string | null>(null);
   const [savedDraft, setSavedDraft] = useState<AssessmentDraft | null>(null);
+  const restoredDeviceState = useRef(false);
   const draftRef = useRef<AssessmentDraft | null>(null);
   const historyRef = useRef(store.assessments);
   const lastLocation = useRef("");
+  const restoringLocation = useRef<string | null>(null);
   const [removeDeviceId, setRemoveDeviceId] = useState<string | null>(null);
   const [detailDomain, setDetailDomain] = useState<DomainId | null>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -422,6 +431,9 @@ export default function GraderApp({
   const [suggestedJurisdiction, setSuggestedJurisdiction] = useState("");
 
   useEffect(() => {
+    // History transitions may resend server props. Restore device state only on mount.
+    if (restoredDeviceState.current) return;
+    restoredDeviceState.current = true;
     let restoredStore = store;
     let restoredDraft: AssessmentDraft | null = null;
     try {
@@ -471,9 +483,13 @@ export default function GraderApp({
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
   }, [loaded]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!loaded) return;
     const key = locationKey(view, wizardStep, selectedId);
+    if (restoringLocation.current !== null) {
+      if (restoringLocation.current !== key) return;
+      restoringLocation.current = null;
+    }
     if (lastLocation.current !== key) {
       writeLocation(view, wizardStep, selectedId, false);
       lastLocation.current = key;
@@ -605,6 +621,7 @@ export default function GraderApp({
     setToast(message);
   }
   function navigate(next: View, reportId?: string) {
+    restoringLocation.current = null;
     if (next === "report" || next === "progress")
       setSelectedId(reportId ?? current?.id ?? null);
     setView(next);
@@ -671,6 +688,7 @@ export default function GraderApp({
     setView(nextView);
     setDetailDomain(null);
     lastLocation.current = locationKey(nextView, nextStep, nextId);
+    restoringLocation.current = lastLocation.current;
     writeLocation(nextView, nextStep, nextId, true);
   }
   function resumeDraft() {

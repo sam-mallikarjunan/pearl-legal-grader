@@ -1273,7 +1273,7 @@ export default function AccountPanel({
                     grader, then choose “Save selected report.”
                   </p>
                 ) : (
-                  reports.map((saved) => (
+                  reports.map((saved, reportIndex) => (
                     <article className="guide-note" key={saved.id}>
                       <h3>{saved.snapshot.label}</h3>
                       <p className="fine-print">
@@ -1468,7 +1468,11 @@ export default function AccountPanel({
                           </p>
                         </details>
                       )}
-                      <WebsiteAIReview reportId={saved.id} />
+                      <WebsiteAIReview
+                        reportId={saved.id}
+                        reportLabel={saved.snapshot.label}
+                        reportNumber={reportIndex + 1}
+                      />
                     </article>
                   ))
                 )}
@@ -1501,6 +1505,7 @@ export default function AccountPanel({
             </WorkspaceArea>
             {!onImport && (
               <WorkspaceArea area="learning">
+                <h2>Learning and community</h2>
                 <NurtureEnrollment
                   key={`learning-${user.id}-${preferences?.revision ?? 0}`}
                   onPreferencesChanged={() => loadPrivate()}

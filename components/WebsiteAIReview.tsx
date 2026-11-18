@@ -43,7 +43,15 @@ function availability(value: unknown): AIReviewAvailability | null {
   return item as unknown as AIReviewAvailability;
 }
 
-export default function WebsiteAIReview({ reportId }: { reportId: string }) {
+export default function WebsiteAIReview({
+  reportId,
+  reportLabel,
+  reportNumber,
+}: {
+  reportId: string;
+  reportLabel: string;
+  reportNumber: number;
+}) {
   const [state, setState] = useState<AIReviewAvailability | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -101,7 +109,7 @@ export default function WebsiteAIReview({ reportId }: { reportId: string }) {
   return (
     <section
       className="guide-note"
-      aria-label="Optional AI website explanation"
+      aria-label={`Optional AI website explanation for report ${reportNumber}: ${reportLabel}`}
     >
       <h3>
         <BookOpen size={17} /> Explain the saved website findings

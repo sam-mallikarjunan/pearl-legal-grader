@@ -2142,13 +2142,13 @@ svg {
   flex: 1;
 }
 .preference strong {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 500;
   display: block;
 }
 .preference small {
-  font-size: 10px;
-  color: #859275;
+  font-size: 13px;
+  color: var(--muted);
   line-height: 1.8;
   display: block;
   margin-top: 6px;
@@ -3608,10 +3608,10 @@ svg {
     gap: 16px;
   }
   .preference strong {
-    font-size: 11px;
+    font-size: 14px;
   }
   .preference small {
-    font-size: 9px;
+    font-size: 13px;
   }
   .dialog-data-actions {
     justify-content: flex-start;
@@ -3860,7 +3860,8 @@ svg {
   line-height: 1.55;
   color: var(--muted);
 }
-:is(.report-page, .assessment-main, .progress-page, .how-section) p:not(.eyebrow):not(.fine-print),
+:is(.report-page, .assessment-main, .progress-page, .how-section)
+  p:not(.eyebrow):not(.fine-print),
 .report-goal p,
 .action-guide li {
   font-size: 0.9375rem;
@@ -3948,17 +3949,18 @@ svg {
   line-height: 1.55;
 }
 :is(
-  .action-controls,
-  .action-body,
-  .module-actions,
-  .wizard-actions,
-  .page-heading,
-  .save-banner,
-  .report-meta,
-  .assessment-aside,
-  .dialog .button-row,
-  .dialog-data-actions
-) :is(.btn, .quiet-button, .text-link) {
+    .action-controls,
+    .action-body,
+    .module-actions,
+    .wizard-actions,
+    .page-heading,
+    .save-banner,
+    .report-meta,
+    .assessment-aside,
+    .dialog .button-row,
+    .dialog-data-actions
+  )
+  :is(.btn, .quiet-button, .text-link) {
   font-size: 0.875rem;
   line-height: 1.4;
 }
