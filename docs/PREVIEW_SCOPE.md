@@ -173,3 +173,8 @@ Named public profiles and legal-quality rankings, ML-adjusted production grades,
 - Automation keys are one-time, owner-derived and write-only; missing/revoked/expired keys, browser origins, unknown fields, oversized payloads and changed-request replays fail safely.
 - Delivery receipt, explicit review and atomic import are distinct; payload expiry/discard, safe pending-data export and no-overwrite/retry semantics remain observable without exposing keys or raw requests.
 - Practice comparisons withhold small, incompatible, incomplete or unmapped cohorts; prospective private action observations never invent elapsed follow-ups or causal effects.
+
+
+## Optional guided walkthroughs
+
+The start page, first report and workspace overview offer a short tooltip tour; owners can dismiss or replay it. Assessment and device-progress screens provide manual contextual tours. A fictional report explains its example status and cannot be saved as an owner report. The walkthrough highlights visible controls, adapts to narrow screens, supports keyboard navigation and returns focus when it closes. It never changes answers, grades, progress, data-sharing permissions or email enrollment, and never starts a scan or saves a report. Tour choices are versioned device-local preferences; unreadable records remain intact and blocked storage falls back to this visit. Clear this device resets these choices. No tour events are sent to analytics or the account.

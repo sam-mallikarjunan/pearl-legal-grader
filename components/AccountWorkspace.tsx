@@ -16,6 +16,7 @@ import {
   type ActionObservation,
 } from "../lib/action-observations";
 import { decodeOutcomePlan, type OutcomePlan } from "../lib/outcome-plans";
+import GuidedTour from "./GuidedTour";
 import "./account-workspace.css";
 
 type WorkspaceAreaName =
@@ -88,6 +89,43 @@ const areas: Array<{
   },
 ];
 const navigationEvent = "grader:workspace-navigation";
+const workspaceTourSteps = [
+  {
+    id: "next-step",
+    target:
+      '[data-tour="workspace-overview-nav"], [data-tour="workspace-section-select"]',
+    title: "Start with one useful next step",
+    body: "My next step points you toward the next useful action, report, or check-in. Start there when you return; you can explore the other tools when you need them.",
+  },
+  {
+    id: "my-action",
+    target:
+      '[data-tour="workspace-action-nav"], [data-tour="workspace-section-select"]',
+    title: "Put your action into practice",
+    body: "My action holds your prioritized checklist and the missed-call playbook. Record what you tried and how it went. Completing an action does not automatically raise your grade.",
+  },
+  {
+    id: "review-progress",
+    target:
+      '[data-tour="workspace-review-nav"], [data-tour="workspace-section-select"]',
+    title: "Return to review what changed",
+    body: "Review progress brings together your Monthly Practice Brief, comparisons, and optional reminders. A monthly comparison needs compatible figures; a readiness score alone cannot prove business improvement.",
+  },
+  {
+    id: "reports-and-numbers",
+    target:
+      '[data-tour="workspace-data-nav"], [data-tour="workspace-section-select"]',
+    title: "Keep reports and figures together",
+    body: "Reports & numbers holds the reports you chose to save, business totals, and optional import tools. Opening a saved report on a device does not upload that device’s other history.",
+  },
+  {
+    id: "settings-and-help",
+    target:
+      '[data-tour="workspace-settings-nav"], [data-tour="workspace-section-select"]',
+    title: "Keep control of your choices",
+    body: "Settings & help is where you manage sharing choices, export your data, or ask Pearl for help. Lessons and the opt-in leaderboard live in Learning & community. This tour changes none of those choices.",
+  },
+];
 const WorkspaceContext = createContext<{
   active: WorkspaceAreaName;
   visited: WorkspaceAreaName[];
@@ -164,11 +202,16 @@ export function AccountWorkspace({
     <WorkspaceContext.Provider value={{ active, visited }}>
       <div className="account-workspace" onClickCapture={followLink}>
         {!compact && (
-          <nav className="workspace-navigation" aria-label="Your workspace">
+          <nav
+            className="workspace-navigation"
+            aria-label="Your workspace"
+            data-tour="workspace-navigation"
+          >
             <div className="workspace-mobile-navigation">
               <label htmlFor={navigationId}>Workspace section</label>
               <select
                 id={navigationId}
+                data-tour="workspace-section-select"
                 value={active}
                 onChange={(event) => {
                   const area = areas.find(
@@ -190,12 +233,23 @@ export function AccountWorkspace({
               <a
                 key={area.name}
                 href={`#${area.target}`}
+                data-tour={`workspace-${area.name}-nav`}
                 aria-current={active === area.name ? "page" : undefined}
               >
                 {area.title}
               </a>
             ))}
           </nav>
+        )}
+        {!compact && (
+          <GuidedTour
+            key={active}
+            tourId="workspace"
+            title="Find your way around your workspace"
+            description="Take a short tour, then choose the next step that fits your practice."
+            steps={workspaceTourSteps}
+            autoOffer={active === "overview"}
+          />
         )}
         {children}
       </div>

@@ -67,6 +67,9 @@ import {
 } from "../lib/storage";
 import type { CloudActionProgress } from "../lib/account/types";
 import { mergeAccountProgress } from "../lib/account-device-progress";
+import GuidedTour from "./GuidedTour";
+import { GRADER_TOURS } from "../lib/grader-tours";
+import { clearOnboardingPreferences } from "../lib/onboarding";
 import {
   DOMAIN_IDS,
   type Answers,
@@ -315,7 +318,10 @@ function ActionCard({
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <article className={`action-card ${state === "done" ? "action-done" : ""}`}>
+    <article
+      className={`action-card ${state === "done" ? "action-done" : ""}`}
+      data-tour="action-card"
+    >
       <div className="action-number">
         {state === "done" ? (
           <Check size={19} />
@@ -1059,6 +1065,7 @@ export default function GraderApp({
   }
   function clearData() {
     websiteScans.clear();
+    clearOnboardingPreferences();
     try {
       localStorage.removeItem(STORAGE_KEY);
       localStorage.removeItem(ASSESSMENT_DRAFT_KEY);
@@ -1165,6 +1172,66 @@ export default function GraderApp({
     }));
   }
 
+  function renderTour(id: string) {
+    const tour = GRADER_TOURS[id];
+    const steps = tour.steps
+      .filter(
+        (step) =>
+          id !== "report" || step.id !== "action" || !!report?.actions.length,
+      )
+      .map((step) =>
+        id === "assessment-questions" &&
+        step.id === "questions" &&
+        activeModuleQuestions.length === 0
+          ? {
+              ...step,
+              target: ".assessment-main .empty-note",
+              title: "This area doesn’t apply to your setup",
+              body: "There are no applicable questions here. This area is excluded rather than graded as a failure. Close the tour and continue to the safeguards check when you’re ready.",
+            }
+          : step,
+      )
+      .map((step) => {
+        if (id === "start" && step.id === "website" && !websiteScansEnabled)
+          return {
+            ...step,
+            body: "Add your firm’s public website for context, or use the no-website option below. Live website checks aren’t available right now. You can still assess your practice, and having no website won’t lower your practice grade.",
+          };
+        if (id !== "report" || !current?.isSample) return step;
+        const sampleBodies: Record<string, string> = {
+          evidence:
+            "Juniper is a fictional practice. These example grades and answers explain how the product works; they don’t describe your firm or a website we inspected.",
+          priority:
+            "Juniper’s chosen goal is cash collection. The priority score and evidence coverage show what supports this fictional starting point. Your own goal will shape your report.",
+          action:
+            "Explore a sample checklist and what done looks like. Tracking an action in this example changes only its local example progress. It doesn’t describe work at your firm.",
+          save: "You can explore My progress for this example. Create your own assessment before using email and login options to save a report privately. Fictional examples cannot be saved to your account.",
+        };
+        return { ...step, body: sampleBodies[step.id] ?? step.body };
+      });
+    const reportView = id === "report" || id === "progress";
+    return (
+      <GuidedTour
+        key={reportView ? `${id}:${current?.id ?? ""}` : id}
+        tourId={id === "report" && current?.isSample ? "report-example" : id}
+        title={
+          id === "report" && current?.isSample
+            ? "Explore this example report"
+            : tour.title
+        }
+        description={
+          id === "report" && current?.isSample
+            ? "See how a report works, then start with your own practice."
+            : tour.description
+        }
+        steps={steps}
+        autoOffer={tour.autoOffer}
+        enabled={loaded && !modal && !unreadableData}
+        className="grader-tour-entry"
+      />
+    );
+  }
+
   function renderHome() {
     const cash = example.domains.find((d) => d.id === "cash")!;
     return (
@@ -1210,6 +1277,7 @@ export default function GraderApp({
             )}
             <form
               className="url-form"
+              data-tour="start-website"
               onSubmit={(e) => {
                 e.preventDefault();
                 start();
@@ -1276,6 +1344,7 @@ export default function GraderApp({
                 Saved on this device
               </span>
             </div>
+            {renderTour("start")}
             {resumableScan && (
               <div className="scan-resume">
                 <Globe2 size={19} />
@@ -1292,7 +1361,7 @@ export default function GraderApp({
           <div className="hero-visual">
             <div className="visual-orbit orbit-one" />
             <div className="visual-orbit orbit-two" />
-            <div className="sample-report-card">
+            <div className="sample-report-card" data-tour="start-example">
               <div className="sample-card-top">
                 <span className="sample-dot" />
                 ILLUSTRATIVE REPORT
@@ -1457,6 +1526,13 @@ export default function GraderApp({
           </button>
           <h1>Your practice checkup</h1>
           <p>Choose one area to improve.</p>
+          {renderTour(
+            wizardStep === 0
+              ? "assessment-context"
+              : wizardStep === 1
+                ? "assessment-questions"
+                : "assessment-safeguards",
+          )}
           <ol className="step-list">
             {[
               "Your practice & priorities",
@@ -1549,7 +1625,11 @@ export default function GraderApp({
           <div className="progress-track">
             <span style={{ width: `${((wizardStep + 1) / 3) * 100}%` }} />
           </div>
-          <p className="draft-save-note" role="status">
+          <p
+            className="draft-save-note"
+            role="status"
+            data-tour="assessment-draft"
+          >
             {storageWarning
               ? "Keep this tab open while you finish. Check the browser storage message above before leaving."
               : "Draft saved on this device. Your dated report saves when you choose “See my report.”"}
@@ -1563,7 +1643,7 @@ export default function GraderApp({
               <p className="muted">
                 Choose your immediate priority. Growth is one option.
               </p>
-              <div className="goal-options">
+              <div className="goal-options" data-tour="assessment-goals">
                 {GOALS.map((g) => {
                   const Icon = g.icon;
                   return (
@@ -1592,7 +1672,7 @@ export default function GraderApp({
                   );
                 })}
               </div>
-              <div className="field-grid">
+              <div className="field-grid" data-tour="assessment-context">
                 <label className="field-label">
                   Main practice area
                   <select
@@ -1757,7 +1837,11 @@ export default function GraderApp({
                 </div>
               )}
               {activeModuleQuestions.map((q, i) => (
-                <fieldset className="question" key={q.id}>
+                <fieldset
+                  className="question"
+                  key={q.id}
+                  data-tour="assessment-questions"
+                >
                   <legend>
                     <span>{String(i + 1).padStart(2, "0")}</span>
                     {q.title}
@@ -1804,7 +1888,7 @@ export default function GraderApp({
                   <ArrowRight size={16} />
                 </button>
               </div>
-              <p className="fine-print">
+              <p className="fine-print" data-tour="assessment-unknown">
                 Skipped answers remain unknown. We’ll show a grade only when
                 enough applicable evidence is present.
               </p>
@@ -1818,7 +1902,7 @@ export default function GraderApp({
                 certify compliance, and a strong score elsewhere won’t hide a
                 concern.
               </p>
-              <div className="field-grid">
+              <div className="field-grid" data-tour="assessment-safeguards">
                 <label className="field-label">
                   Do you use AI for legal work?
                   <select
@@ -1897,7 +1981,7 @@ export default function GraderApp({
                   </fieldset>
                 ))}
               </div>
-              <div className="wizard-actions">
+              <div className="wizard-actions" data-tour="assessment-finish">
                 <button
                   className="quiet-button"
                   onClick={() => setWizardStep(1)}
@@ -1964,7 +2048,11 @@ export default function GraderApp({
             Print / save PDF
           </button>
         </div>
-        <div className={`evidence-banner ${current.isSample ? "sample" : ""}`}>
+        {renderTour("report")}
+        <div
+          className={`evidence-banner ${current.isSample ? "sample" : ""}`}
+          data-tour="report-evidence"
+        >
           <Info size={18} />
           <span>
             {current.isSample
@@ -1973,7 +2061,7 @@ export default function GraderApp({
           </span>
           <span className="tag">Provisional rubric</span>
         </div>
-        <div className="report-overview">
+        <div className="report-overview" data-tour="report-overview">
           <div className="report-score card">
             <div>
               <span className="eyebrow">
@@ -2210,7 +2298,7 @@ export default function GraderApp({
             ))}
           </div>
         </div>
-        <div className="save-banner">
+        <div className="save-banner" data-tour="report-save">
           <div>
             <h3>A baseline to come back to.</h3>
             <p>
@@ -2394,6 +2482,7 @@ export default function GraderApp({
           </div>
           <button
             className="btn btn-primary"
+            data-tour="progress-reassess"
             onClick={() =>
               continueAssessment(goalFor(report.contextSnapshot).domain)
             }
@@ -2402,7 +2491,8 @@ export default function GraderApp({
             <ArrowRight size={16} />
           </button>
         </div>
-        <div className="evidence-banner">
+        {renderTour("progress")}
+        <div className="evidence-banner" data-tour="progress-scope">
           <LockKeyhole size={18} />
           <span>
             These reports and action states are saved in this browser. Your
@@ -2474,7 +2564,10 @@ export default function GraderApp({
           </section>
           <aside>
             <PeerContextPanel assessment={current} />
-            <div className="card assessment-history">
+            <div
+              className="card assessment-history"
+              data-tour="progress-history"
+            >
               <span className="eyebrow">YOUR ASSESSMENT HISTORY</span>
               <h3>A record of where you started.</h3>
               <p className="fine-print">
@@ -2860,7 +2953,12 @@ export default function GraderApp({
             Methodology
           </button>
         </nav>
-        <a className="admin-nav" href="/account" aria-label="Private account">
+        <a
+          className="admin-nav"
+          href="/account"
+          aria-label="Private account"
+          data-tour="private-account"
+        >
           <LockKeyhole size={16} />
           <span>Private account</span>
         </a>

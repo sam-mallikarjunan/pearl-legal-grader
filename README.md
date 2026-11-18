@@ -41,6 +41,12 @@ Each result records page URLs, timestamps, scanner and rubric versions, bounded 
 
 Unknown, blocked, unavailable and inapplicable evidence does not become zero. A partial scan can have a higher score than a more complete scan, so the report displays weighted evidence coverage separately. The website score is a provisional assessment of observed checks; it does not measure legal skill, licensing, compliance or overall firm quality.
 
+## Guided onboarding
+
+Short, optional spotlight tours introduce the starting page, reports and private workspace. The assessment steps and device progress page have contextual help tours. Each tour highlights actual controls, supports Back/Next, Escape and keyboard navigation, and can be replayed. Fictional reports have separate explanations and tour preferences.
+
+A first-visit offer never opens a tour automatically. Completion and dismissal choices stay on this device, separate from answers and account permissions. Clearing this device resets them. Tours do not answer questions, change scores, start scans, save reports, opt into research or enroll anyone in emails.
+
 ## Backend setup
 
 The backend uses Vercel Workflow for scan execution and Supabase for jobs, access grants, caching and usage counters. Apply the SQL migration in `supabase/migrations/` to a dedicated project. Keep service credentials server-side; never commit them or expose them through `NEXT_PUBLIC_` variables.
