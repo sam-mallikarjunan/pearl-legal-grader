@@ -61,6 +61,7 @@ const goalLabels: Record<Goal, string> = {
 };
 
 export default function BenchmarkExplorer() {
+  const [ready, setReady] = useState(false);
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
   const [kind, setKind] = useState("All");
@@ -84,6 +85,7 @@ export default function BenchmarkExplorer() {
     annualCollections: "",
   });
   useEffect(() => {
+    setReady(true);
     try {
       const saved = parseStore(window.localStorage.getItem(STORAGE_KEY));
       const latest = saved?.assessments
@@ -280,6 +282,7 @@ export default function BenchmarkExplorer() {
               <div>
                 <Search size={17} />
                 <input
+                  disabled={!ready}
                   type="search"
                   placeholder="Try intake, cash, or AI"
                   value={query}
@@ -290,6 +293,7 @@ export default function BenchmarkExplorer() {
             <label>
               <span>Topic</span>
               <select
+                disabled={!ready}
                 aria-label="Topic"
                 value={category}
                 onChange={(event) => setCategory(event.target.value)}
@@ -303,6 +307,7 @@ export default function BenchmarkExplorer() {
             <label>
               <span>Evidence type</span>
               <select
+                disabled={!ready}
                 aria-label="Evidence type"
                 value={kind}
                 onChange={(event) => setKind(event.target.value)}
@@ -319,6 +324,7 @@ export default function BenchmarkExplorer() {
           </p>
           {!filtering && (
             <button
+              disabled={!ready}
               className="btn btn-secondary benchmark-library-toggle"
               type="button"
               aria-expanded={showAll}
@@ -445,6 +451,7 @@ export default function BenchmarkExplorer() {
                   <label key={key}>
                     <span>{label}</span>
                     <input
+                      disabled={!ready}
                       type="number"
                       min="0"
                       max="1000000000000"
@@ -485,6 +492,7 @@ export default function BenchmarkExplorer() {
                 )}
               </div>
               <button
+                disabled={!ready}
                 className="text-link"
                 onClick={() =>
                   setFunnelInput({
@@ -523,6 +531,7 @@ export default function BenchmarkExplorer() {
                   <label key={key}>
                     <span>{label}</span>
                     <input
+                      disabled={!ready}
                       type="number"
                       min="0"
                       max="1000000000000"
@@ -571,6 +580,7 @@ export default function BenchmarkExplorer() {
                 <ArrowUpRight size={15} />
               </a>
               <button
+                disabled={!ready}
                 className="text-link"
                 onClick={() =>
                   setCashInput({
